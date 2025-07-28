@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Application.UseCases.Folders
 {
-    internal class CreateFolderUseCase
+    public class CreateFolderUseCase
     {
     }
 }

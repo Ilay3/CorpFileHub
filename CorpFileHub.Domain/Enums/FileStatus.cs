@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace CorpFileHub.Domain.Enums
+﻿namespace CorpFileHub.Domain.Enums
 {
-    internal class FileStatus
+    public enum FileStatus
     {
+        Active = 0,
+        InEditing = 1,
+        Locked = 2,
+        Archived = 3,
+        Deleted = 4
     }
 }

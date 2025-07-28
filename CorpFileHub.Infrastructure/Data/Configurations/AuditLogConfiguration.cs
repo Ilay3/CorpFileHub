@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Infrastructure.Data.Configurations
 {
-    internal class AuditLogConfiguration
+    public class AuditLogConfiguration
     {
     }
 }

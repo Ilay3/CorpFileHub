@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Application.UseCases.Access
 {
-    internal class SetAccessRightsUseCase
+    public class SetAccessRightsUseCase
     {
     }
 }

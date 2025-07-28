@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Application.UseCases.Files
 {
-    internal class DownloadFileUseCase
+    public class DownloadFileUseCase
     {
     }
 }

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Application.DTOs
 {
-    internal class FolderDto
+    public class FolderDto
     {
     }
 }

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Application.UseCases.Audit
 {
-    internal class GetAuditLogUseCase
+    public class GetAuditLogUseCase
     {
     }
 }

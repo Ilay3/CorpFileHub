@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Infrastructure.External.YandexDisk
 {
-    internal class YandexDiskClient
+    public class YandexDiskClient
     {
     }
 }

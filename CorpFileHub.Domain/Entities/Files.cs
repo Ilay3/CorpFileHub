@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Domain.Entities
 {
-    internal class File
+    public class Files
     {
     }
 }

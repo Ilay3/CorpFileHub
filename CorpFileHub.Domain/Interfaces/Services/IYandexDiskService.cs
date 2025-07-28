@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace CorpFileHub.Domain.Interfaces.Services
+﻿namespace CorpFileHub.Domain.Interfaces.Services
 {
-    internal interface IYandexDiskService
+    public interface IYandexDiskService
     {
+        Task<string> UploadFileAsync(Stream fileStream, string fileName, string folderPath);
+        Task<Stream> DownloadFileAsync(string filePath);
+        Task<bool> DeleteFileAsync(string filePath);
+        Task<string> GetEditLinkAsync(string filePath);
+        Task<bool> FileExistsAsync(string filePath);
+        Task<DateTime> GetLastModifiedAsync(string filePath);
     }
 }

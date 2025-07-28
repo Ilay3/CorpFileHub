@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Infrastructure.Repositories
 {
-    internal class FileRepository
+    public class FileRepository
     {
     }
 }

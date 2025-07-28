@@ -1,12 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using CorpFileHub.Domain.Interfaces.Repositories;
+using CorpFileHub.Domain.Entities;
+using CorpFileHub.Infrastructure.Data;
 
 namespace CorpFileHub.Infrastructure.Repositories
 {
-    internal class UserRepository
+    public class UserRepository : IUserRepository
     {
+        private readonly ApplicationDbContext _context;
+
+        public UserRepository(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        // TODO: Реализация методов репозитория
     }
 }

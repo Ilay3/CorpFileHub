@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Application.Services
 {
-    internal class AuditService
+    public class AuditService
     {
     }
 }

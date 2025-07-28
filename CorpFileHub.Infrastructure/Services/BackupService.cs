@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CorpFileHub.Infrastructure.Services
 {
-    internal class BackupService
+    public class BackupService
     {
     }
 }

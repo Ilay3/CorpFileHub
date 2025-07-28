@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using CorpFileHub.Domain.Interfaces.Services;
 
 namespace CorpFileHub.Infrastructure.Services
 {
-    internal class YandexDiskService
+    public class YandexDiskService : IYandexDiskService
     {
+        // TODO: Реализация интеграции с Yandex.Disk
     }
 }
