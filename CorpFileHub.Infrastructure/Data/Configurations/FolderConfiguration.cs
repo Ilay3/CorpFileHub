@@ -4,9 +4,9 @@ using CorpFileHub.Domain.Entities;
 
 namespace CorpFileHub.Infrastructure.Data.Configurations
 {
-    public class FileConfiguration : IEntityTypeConfiguration<FileItem>
+    public class FolderConfiguration : IEntityTypeConfiguration<Folder>
     {
-        public void Configure(EntityTypeBuilder<FileItem> builder)
+        public void Configure(EntityTypeBuilder<Folder> builder)
         {
             builder.HasKey(f => f.Id);
 
@@ -21,42 +21,36 @@ namespace CorpFileHub.Infrastructure.Data.Configurations
             builder.Property(f => f.YandexDiskPath)
                 .HasMaxLength(1000);
 
-            builder.Property(f => f.ContentType)
-                .HasMaxLength(100);
-
-            builder.Property(f => f.Extension)
-                .HasMaxLength(10);
+            builder.Property(f => f.Description)
+                .HasMaxLength(1000);
 
             builder.Property(f => f.Tags)
                 .HasMaxLength(500);
 
-            builder.Property(f => f.Description)
-                .HasMaxLength(1000);
-
             // Индексы
             builder.HasIndex(f => f.Path);
-            builder.HasIndex(f => f.Name);
-            builder.HasIndex(f => new { f.Name, f.FolderId });
+            builder.HasIndex(f => new { f.Name, f.ParentFolderId });
 
             // Связи
             builder.HasOne(f => f.Owner)
-                .WithMany(u => u.OwnedFiles)
+                .WithMany(u => u.OwnedFolders)
                 .HasForeignKey(f => f.OwnerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasOne(f => f.Folder)
-                .WithMany(folder => folder.Files)
-                .HasForeignKey(f => f.FolderId)
+            // Самоссылающаяся связь для иерархии папок
+            builder.HasOne(f => f.ParentFolder)
+                .WithMany(f => f.SubFolders)
+                .HasForeignKey(f => f.ParentFolderId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasMany(f => f.Versions)
-                .WithOne(v => v.File)
-                .HasForeignKey(v => v.FileId)
-                .OnDelete(DeleteBehavior.Cascade);
+            builder.HasMany(f => f.Files)
+                .WithOne(file => file.Folder)
+                .HasForeignKey(file => file.FolderId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasMany(f => f.AccessRules)
-                .WithOne(ar => ar.File)
-                .HasForeignKey(ar => ar.FileId)
+                .WithOne(ar => ar.Folder)
+                .HasForeignKey(ar => ar.FolderId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }

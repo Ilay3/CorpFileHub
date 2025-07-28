@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace CorpFileHub.Domain.Interfaces.Services
+﻿namespace CorpFileHub.Domain.Interfaces.Services
 {
-    internal interface IFileStorageService
+    public interface IFileStorageService
     {
+        Task<string> SaveFileVersionAsync(Stream fileStream, int fileId, int version, string fileName);
+        Task<Stream> GetFileVersionAsync(int fileId, int version);
+        Task<bool> DeleteFileVersionAsync(int fileId, int version);
+        Task<string> GetVersionPathAsync(int fileId, int version);
+        Task<bool> VersionExistsAsync(int fileId, int version);
     }
 }
