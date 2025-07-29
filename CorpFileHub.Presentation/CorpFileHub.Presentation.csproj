@@ -10,7 +10,6 @@
     <Folder Include="Areas\Identity\" />
     <Folder Include="Pages\Account\" />
     <Folder Include="wwwroot\css\" />
-    <Folder Include="wwwroot\js\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>
 

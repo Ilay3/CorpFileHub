@@ -1,0 +1,636 @@
+﻿@page "/"
+@page "/files"
+@using CorpFileHub.Domain.Entities
+@using CorpFileHub.Domain.Interfaces.Repositories
+@using CorpFileHub.Application.UseCases.Files
+@using CorpFileHub.Application.UseCases.Folders
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@inject IFolderRepository FolderRepository
+@inject IFileRepository FileRepository
+@inject CreateFolderUseCase CreateFolderUseCase
+@inject UploadFileUseCase UploadFileUseCase
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Мои документы - CorpFileHub</PageTitle>
+
+<!-- Основной контейнер -->
+<div class="container-fluid file-manager-container">
+    <div class="row h-100">
+        
+        <!-- Левая панель - дерево папок -->
+        <div class="col-md-3 folder-tree-panel">
+            <div class="folder-tree-header">
+                <h5 class="mb-3">
+                    <i class="bi bi-folder-fill text-warning"></i> 
+                    Мои папки
+                </h5>
+                
+                <!-- Кнопка создания папки -->
+                <button class="btn btn-yellow btn-sm w-100 mb-3" @onclick="ShowCreateFolderDialog">
+                    <i class="bi bi-folder-plus"></i> Создать папку
+                </button>
+            </div>
+
+            <!-- Дерево папок -->
+            <div class="folder-tree-content">
+                @if (folders != null)
+                {
+                    <!-- Корневая папка -->
+                    <div class="folder-item @(selectedFolderId == null ? "selected" : "")" 
+                         @onclick="() => OnFolderSelected(null)">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-house-fill me-2 text-warning"></i>
+                            <span class="folder-name">Корень</span>
+                        </div>
+                    </div>
+
+                    <!-- Подпапки -->
+                    @foreach (var folder in folders.Where(f => f.ParentFolderId == null))
+                    {
+                        <FolderTreeItem Folder="folder" 
+                                      AllFolders="folders" 
+                                      SelectedFolderId="selectedFolderId"
+                                      OnFolderSelect="OnFolderSelected" />
+                    }
+                }
+                else
+                {
+                    <div class="text-center text-muted">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                        <p class="mt-2">Загрузка папок...</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Правая панель - содержимое -->
+        <div class="col-md-9 file-content-panel">
+            
+            <!-- Заголовок и навигация -->
+            <div class="content-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <!-- Хлебные крошки -->
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-0">
+                            <li class="breadcrumb-item">
+                                <a href="#" @onclick="() => OnFolderSelected(null)" @onclick:preventDefault="true" class="text-warning">
+                                    <i class="bi bi-house"></i> Корень
+                                </a>
+                            </li>
+                            @if (selectedFolder != null)
+                            {
+                                @foreach (var pathPart in GetBreadcrumbPath())
+                                {
+                                    <li class="breadcrumb-item">
+                                        <a href="#" @onclick="() => OnFolderSelected(pathPart.Id)" @onclick:preventDefault="true" class="text-warning">
+                                            @pathPart.Name
+                                        </a>
+                                    </li>
+                                }
+                            }
+                        </ol>
+                    </nav>
+
+                    <!-- Кнопки действий -->
+                    <div class="btn-group">
+                        <button class="btn btn-yellow" @onclick="ShowUploadDialog">
+                            <i class="bi bi-cloud-upload"></i> Загрузить файл
+                        </button>
+                        <button class="btn btn-outline-warning" @onclick="RefreshView">
+                            <i class="bi bi-arrow-clockwise"></i> Обновить
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Поиск -->
+            <div class="search-panel">
+                <div class="input-group">
+                    <span class="input-group-text bg-yellow-light">
+                        <i class="bi bi-search text-warning"></i>
+                    </span>
+                    <input type="text" class="form-control" placeholder="Поиск файлов и папок..." 
+                           @bind="searchQuery" @onkeyup="OnSearchKeyUp" />
+                    @if (!string.IsNullOrEmpty(searchQuery))
+                    {
+                        <button class="btn btn-outline-warning" @onclick="ClearSearch">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Область содержимого -->
+            <div class="content-area">
+                @if (isLoading)
+                {
+                    <div class="loading-state">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Загрузка файлов...</p>
+                    </div>
+                }
+                else if (currentFiles?.Any() == true || currentFolders?.Any() == true)
+                {
+                    <!-- Сетка элементов -->
+                    <div class="files-grid">
+                        
+                        <!-- Папки -->
+                        @if (currentFolders?.Any() == true)
+                        {
+                            @foreach (var folder in currentFolders)
+                            {
+                                <div class="file-item folder-item" @ondblclick="() => OnFolderSelected(folder.Id)">
+                                    <div class="file-icon">
+                                        <i class="bi bi-folder-fill text-warning"></i>
+                                    </div>
+                                    <div class="file-info">
+                                        <h6 class="file-name" title="@folder.Name">@TruncateText(folder.Name, 20)</h6>
+                                        <small class="file-meta text-muted">@folder.CreatedAt.ToString("dd.MM.yyyy")</small>
+                                    </div>
+                                    <div class="file-actions">
+                                        <button class="btn btn-sm btn-yellow" @onclick="() => OnFolderSelected(folder.Id)">
+                                            <i class="bi bi-box-arrow-in-right"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ShowFolderMenu(folder)">
+                                            <i class="bi bi-three-dots"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <!-- Файлы -->
+                        @if (currentFiles?.Any() == true)
+                        {
+                            @foreach (var file in currentFiles)
+                            {
+                                <div class="file-item">
+                                    <div class="file-icon">
+                                        <i class="@GetFileIcon(file.Extension)"></i>
+                                    </div>
+                                    <div class="file-info">
+                                        <h6 class="file-name" title="@file.Name">@TruncateText(file.Name, 20)</h6>
+                                        <small class="file-meta text-muted">
+                                            @FormatFileSize(file.Size)<br/>
+                                            @file.UpdatedAt.ToString("dd.MM.yyyy")
+                                        </small>
+                                    </div>
+                                    <div class="file-actions">
+                                        <button class="btn btn-sm btn-yellow" @onclick="() => DownloadFile(file.Id)">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                        @if (CanEditOnline(file.Extension))
+                                        {
+                                            <button class="btn btn-sm btn-outline-success" @onclick="() => OpenForEditing(file.Id)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                        }
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ShowFileMenu(file)">
+                                            <i class="bi bi-three-dots"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else
+                {
+                    <!-- Пустое состояние -->
+                    <div class="empty-state">
+                        <i class="bi bi-folder2-open text-warning"></i>
+                        <h4 class="mt-3">Папка пуста</h4>
+                        <p class="text-muted">Загрузите файлы или создайте новые папки для начала работы</p>
+                        <div class="mt-4">
+                            <button class="btn btn-yellow me-2" @onclick="ShowUploadDialog">
+                                <i class="bi bi-cloud-upload"></i> Загрузить файл
+                            </button>
+                            <button class="btn btn-outline-warning" @onclick="ShowCreateFolderDialog">
+                                <i class="bi bi-folder-plus"></i> Создать папку
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальные окна -->
+@if (showCreateFolderDialog)
+{
+    <CreateFolderModal IsVisible="showCreateFolderDialog" 
+                      ParentFolderId="selectedFolderId"
+                      OnFolderCreated="OnFolderCreated"
+                      OnCancel="() => showCreateFolderDialog = false" />
+}
+
+@if (showUploadDialog)
+{
+    <UploadFileModal IsVisible="showUploadDialog" 
+                    FolderId="selectedFolderId ?? 0"
+                    OnFilesUploaded="OnFilesUploaded"
+                    OnCancel="() => showUploadDialog = false" />
+}
+
+<!-- Стили -->
+<style>
+    :root {
+        --yellow-primary: #ffc107;
+        --yellow-secondary: #ffeb3b;
+        --yellow-light: #fff9c4;
+        --yellow-dark: #ff8f00;
+    }
+
+    .file-manager-container {
+        height: 100vh;
+        background: linear-gradient(135deg, #fff9c4 0%, #ffffff 100%);
+        overflow: hidden;
+    }
+
+    .folder-tree-panel {
+        background: white;
+        border-right: 3px solid var(--yellow-primary);
+        box-shadow: 2px 0 10px rgba(255, 193, 7, 0.1);
+        height: 100vh;
+        overflow-y: auto;
+    }
+
+    .folder-tree-header {
+        padding: 1.5rem 1rem;
+        border-bottom: 2px solid var(--yellow-light);
+        background: linear-gradient(135deg, var(--yellow-light), white);
+    }
+
+    .folder-tree-content {
+        padding: 1rem;
+        height: calc(100vh - 140px);
+        overflow-y: auto;
+    }
+
+    .folder-item {
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .folder-item:hover {
+        background: var(--yellow-light);
+        border-color: var(--yellow-primary);
+        transform: translateX(5px);
+    }
+
+    .folder-item.selected {
+        background: var(--yellow-primary);
+        color: white;
+        border-color: var(--yellow-dark);
+        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+    }
+
+    .file-content-panel {
+        background: white;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .content-header {
+        padding: 1.5rem;
+        border-bottom: 3px solid var(--yellow-light);
+        background: linear-gradient(135deg, var(--yellow-light), white);
+        flex-shrink: 0;
+    }
+
+    .search-panel {
+        padding: 1rem 1.5rem;
+        border-bottom: 2px solid var(--yellow-light);
+        flex-shrink: 0;
+    }
+
+    .content-area {
+        flex: 1;
+        padding: 1.5rem;
+        overflow-y: auto;
+    }
+
+    .files-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .file-item {
+        background: white;
+        border: 2px solid var(--yellow-light);
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 10px rgba(255, 193, 7, 0.1);
+    }
+
+    .file-item:hover {
+        border-color: var(--yellow-primary);
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(255, 193, 7, 0.2);
+    }
+
+    .file-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .file-name {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #333;
+    }
+
+    .file-meta {
+        font-size: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .file-actions {
+        display: flex;
+        gap: 0.25rem;
+        justify-content: center;
+    }
+
+    .btn-yellow {
+        background: var(--yellow-primary);
+        border-color: var(--yellow-primary);
+        color: #333;
+        font-weight: 600;
+    }
+
+    .btn-yellow:hover {
+        background: var(--yellow-dark);
+        border-color: var(--yellow-dark);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(255, 143, 0, 0.3);
+    }
+
+    .btn-outline-warning:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+    }
+
+    .bg-yellow-light {
+        background-color: var(--yellow-light) !important;
+    }
+
+    .loading-state, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 400px;
+        text-align: center;
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: var(--yellow-primary);
+        font-weight: bold;
+    }
+
+    .breadcrumb-item a {
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .breadcrumb-item a:hover {
+        color: var(--yellow-dark) !important;
+    }
+
+    /* Скроллбар */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--yellow-light);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--yellow-primary);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--yellow-dark);
+    }
+</style>
+
+@code {
+    private List<Folder>? folders;
+    private List<FileItem>? currentFiles;
+    private List<Folder>? currentFolders;
+    private Folder? selectedFolder;
+    private int? selectedFolderId;
+    private string searchQuery = "";
+    private bool isLoading = true;
+    private bool showCreateFolderDialog = false;
+    private bool showUploadDialog = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            // Загружаем все папки
+            folders = new List<Folder>();
+            await LoadAllFolders(null);
+            
+            // Загружаем содержимое текущей папки
+            await LoadCurrentFolderContent();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Ошибка загрузки данных: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAllFolders(int? parentId)
+    {
+        var subFolders = await FolderRepository.GetByParentIdAsync(parentId);
+        folders.AddRange(subFolders);
+        
+        foreach (var folder in subFolders)
+        {
+            await LoadAllFolders(folder.Id);
+        }
+    }
+
+    private async Task LoadCurrentFolderContent()
+    {
+        if (string.IsNullOrEmpty(searchQuery))
+        {
+            currentFolders = (await FolderRepository.GetByParentIdAsync(selectedFolderId)).ToList();
+            currentFiles = selectedFolderId.HasValue 
+                ? (await FileRepository.GetByFolderIdAsync(selectedFolderId.Value)).ToList()
+                : new List<FileItem>();
+        }
+        else
+        {
+            // Поиск
+            currentFolders = folders?.Where(f => 
+                f.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)).ToList() ?? new();
+            currentFiles = (await FileRepository.SearchAsync(searchQuery, selectedFolderId)).ToList();
+        }
+
+        selectedFolder = selectedFolderId.HasValue 
+            ? folders?.FirstOrDefault(f => f.Id == selectedFolderId) 
+            : null;
+    }
+
+    private async Task OnFolderSelected(int? folderId)
+    {
+        selectedFolderId = folderId;
+        await LoadCurrentFolderContent();
+        StateHasChanged();
+    }
+
+    private async Task RefreshView()
+    {
+        await LoadData();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadCurrentFolderContent();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchQuery = "";
+        await LoadCurrentFolderContent();
+    }
+
+    private void ShowCreateFolderDialog()
+    {
+        showCreateFolderDialog = true;
+    }
+
+    private void ShowUploadDialog()
+    {
+        showUploadDialog = true;
+    }
+
+    private async Task OnFolderCreated(Folder newFolder)
+    {
+        showCreateFolderDialog = false;
+        await LoadData();
+    }
+
+    private async Task OnFilesUploaded()
+    {
+        showUploadDialog = false;
+        await LoadCurrentFolderContent();
+    }
+
+    private void ShowFolderMenu(Folder folder)
+    {
+        // TODO: Показать меню папки
+    }
+
+    private void ShowFileMenu(FileItem file)
+    {
+        // TODO: Показать меню файла
+    }
+
+    private async Task DownloadFile(int fileId)
+    {
+        await JSRuntime.InvokeVoidAsync("window.open", $"/api/files/{fileId}/download", "_blank");
+    }
+
+    private async Task OpenForEditing(int fileId)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Редактирование будет реализовано");
+    }
+
+    private List<Folder> GetBreadcrumbPath()
+    {
+        var path = new List<Folder>();
+        var current = selectedFolder;
+        
+        while (current != null)
+        {
+            path.Insert(0, current);
+            current = folders?.FirstOrDefault(f => f.Id == current.ParentFolderId);
+        }
+        
+        return path;
+    }
+
+    private string GetFileIcon(string extension)
+    {
+        return extension.ToLower() switch
+        {
+            ".docx" or ".doc" => "bi bi-file-earmark-word text-primary",
+            ".xlsx" or ".xls" => "bi bi-file-earmark-excel text-success",
+            ".pptx" or ".ppt" => "bi bi-file-earmark-ppt text-warning",
+            ".pdf" => "bi bi-file-earmark-pdf text-danger",
+            ".txt" => "bi bi-file-earmark-text text-secondary",
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" => "bi bi-file-earmark-image text-info",
+            _ => "bi bi-file-earmark text-secondary"
+        };
+    }
+
+    private bool CanEditOnline(string extension)
+    {
+        var editableExtensions = new[] { ".docx", ".xlsx", ".pptx" };
+        return editableExtensions.Contains(extension.ToLower());
+    }
+
+    private string TruncateText(string text, int maxLength)
+    {
+        if (text.Length <= maxLength) return text;
+        return text.Substring(0, maxLength - 3) + "...";
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        
+        return $"{number:n1} {suffixes[counter]}";
+    }
+}

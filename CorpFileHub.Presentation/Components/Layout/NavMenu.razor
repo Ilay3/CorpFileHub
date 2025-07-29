@@ -1,6 +1,9 @@
 ﻿<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">CorpFileHub.Presentation</a>
+        <a class="navbar-brand-yellow" href="">
+            <i class="bi bi-cloud-arrow-up-fill text-warning me-2"></i>
+            <span class="brand-text">CorpFileHub</span>
+        </a>
     </div>
 </div>
 
@@ -8,23 +11,420 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
+        <!-- Основные разделы -->
+        <div class="nav-section">
+            <div class="nav-section-header">
+                <small class="section-label">ФАЙЛЫ</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="" Match="NavLinkMatch.All">
+                    <span class="nav-icon">
+                        <i class="bi bi-house-door-fill"></i>
+                    </span>
+                    <span class="nav-label">Мои документы</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/recent">
+                    <span class="nav-icon">
+                        <i class="bi bi-clock-history"></i>
+                    </span>
+                    <span class="nav-label">Недавние</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/favorites">
+                    <span class="nav-icon">
+                        <i class="bi bi-star-fill"></i>
+                    </span>
+                    <span class="nav-label">Избранное</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/search">
+                    <span class="nav-icon">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <span class="nav-label">Поиск</span>
+                </NavLink>
+            </div>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
+        <!-- Разделитель -->
+        <div class="nav-divider"></div>
+
+        <!-- Административные функции -->
+        <div class="nav-section">
+            <div class="nav-section-header">
+                <small class="section-label">УПРАВЛЕНИЕ</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/admin/users">
+                    <span class="nav-icon">
+                        <i class="bi bi-people-fill"></i>
+                    </span>
+                    <span class="nav-label">Пользователи</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/admin/audit">
+                    <span class="nav-icon">
+                        <i class="bi bi-journal-text"></i>
+                    </span>
+                    <span class="nav-label">Журнал аудита</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/admin/settings">
+                    <span class="nav-icon">
+                        <i class="bi bi-gear-fill"></i>
+                    </span>
+                    <span class="nav-label">Настройки</span>
+                </NavLink>
+            </div>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
+        <!-- Разделитель -->
+        <div class="nav-divider"></div>
+
+        <!-- Система -->
+        <div class="nav-section">
+            <div class="nav-section-header">
+                <small class="section-label">СИСТЕМА</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link-yellow" href="/dashboard">
+                    <span class="nav-icon">
+                        <i class="bi bi-graph-up"></i>
+                    </span>
+                    <span class="nav-label">Статистика</span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <a class="nav-link-yellow" href="/api/test/all" target="_blank">
+                    <span class="nav-icon">
+                        <i class="bi bi-bug-fill"></i>
+                    </span>
+                    <span class="nav-label">Тест системы</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Пользователь -->
+        <div class="nav-section user-section">
+            <div class="nav-divider"></div>
+
+            <div class="nav-item px-3">
+                <div class="user-info-card">
+                    <div class="user-avatar">
+                        <i class="bi bi-person-circle text-warning"></i>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">Администратор</div>
+                        <div class="user-email">admin@corpfilehub.local</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-item px-3">
+                <a class="nav-link-yellow logout-link" href="/logout">
+                    <span class="nav-icon">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </span>
+                    <span class="nav-label">Выход</span>
+                </a>
+            </div>
         </div>
     </nav>
 </div>
 
+<style>
+    .top-row {
+        background: linear-gradient(135deg, #ff8f00 0%, #ffc107 100%);
+        border-bottom: 3px solid rgba(255, 143, 0, 0.3);
+        height: 4rem;
+    }
+
+    .navbar-brand-yellow {
+        color: white !important;
+        font-size: 1.4rem;
+        font-weight: 700;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        transition: all 0.3s ease;
+    }
+
+        .navbar-brand-yellow:hover {
+            color: #333 !important;
+            transform: scale(1.05);
+        }
+
+    .brand-text {
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .nav-scrollable {
+        background: linear-gradient(180deg, #333 0%, #2d2d2d 100%);
+        height: calc(100vh - 4rem);
+        overflow-y: auto;
+        padding: 1rem 0;
+    }
+
+    .nav-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .nav-section-header {
+        padding: 0.5rem 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .section-label {
+        color: rgba(255, 193, 7, 0.8);
+        font-weight: 600;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+
+    .nav-item {
+        margin-bottom: 0.25rem;
+    }
+
+    .nav-link-yellow {
+        color: #e0e0e0 !important;
+        background: none;
+        border: none;
+        border-radius: 8px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        line-height: 3rem;
+        width: 100%;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        position: relative;
+        margin: 0 0.5rem;
+        padding: 0 1rem;
+    }
+
+        .nav-link-yellow:hover {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 235, 59, 0.2));
+            color: #ffc107 !important;
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+        }
+
+        .nav-link-yellow.active {
+            background: linear-gradient(135deg, #ffc107, #ffeb3b);
+            color: #333 !important;
+            font-weight: 600;
+            transform: translateX(5px);
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.4);
+        }
+
+            .nav-link-yellow.active::before {
+                content: '';
+                position: absolute;
+                left: -0.5rem;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 4px;
+                height: 60%;
+                background: #ff8f00;
+                border-radius: 0 2px 2px 0;
+            }
+
+    .nav-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.5rem;
+        height: 1.5rem;
+        margin-right: 0.75rem;
+        font-size: 1.1rem;
+    }
+
+    .nav-label {
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .nav-divider {
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(255, 193, 7, 0.5), transparent);
+        margin: 1rem 1.5rem;
+    }
+
+    .user-section {
+        margin-top: auto;
+        padding-top: 1rem;
+    }
+
+    .user-info-card {
+        background: rgba(255, 193, 7, 0.1);
+        border: 2px solid rgba(255, 193, 7, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 0 0.5rem 1rem 0.5rem;
+        display: flex;
+        align-items: center;
+        transition: all 0.3s ease;
+    }
+
+        .user-info-card:hover {
+            background: rgba(255, 193, 7, 0.15);
+            border-color: rgba(255, 193, 7, 0.5);
+            transform: translateY(-2px);
+        }
+
+    .user-avatar {
+        font-size: 2rem;
+        margin-right: 0.75rem;
+    }
+
+    .user-details {
+        flex-grow: 1;
+    }
+
+    .user-name {
+        color: #ffc107;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .user-email {
+        color: rgba(224, 224, 224, 0.8);
+        font-size: 0.75rem;
+    }
+
+    .logout-link {
+        border: 2px solid rgba(220, 53, 69, 0.5) !important;
+        color: #ff6b6b !important;
+    }
+
+        .logout-link:hover {
+            background: rgba(220, 53, 69, 0.2) !important;
+            border-color: #dc3545 !important;
+            color: #ff4757 !important;
+        }
+
+    /* Кнопка меню для мобильных устройств */
+    .navbar-toggler {
+        appearance: none;
+        cursor: pointer;
+        width: 3.5rem;
+        height: 2.5rem;
+        color: white;
+        position: absolute;
+        top: 0.8rem;
+        right: 1rem;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+        .navbar-toggler:checked {
+            background-color: rgba(255, 193, 7, 0.8);
+            border-color: #ffc107;
+        }
+
+        .navbar-toggler:hover {
+            background-color: rgba(255, 193, 7, 0.3);
+            transform: scale(1.05);
+        }
+
+    /* Адаптив */
+    @@media (max-width: 640.98px) {
+        .nav-scrollable
+
+    {
+        display: none;
+    }
+
+    .navbar-toggler:checked ~ .nav-scrollable {
+        display: block;
+    }
+
+    }
+
+    @@media (min-width: 641px) {
+        .navbar-toggler
+
+    {
+        display: none;
+    }
+
+    .nav-scrollable {
+        display: block !important;
+    }
+
+    }
+
+    /* Скроллбар */
+    .nav-scrollable::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .nav-scrollable::-webkit-scrollbar-track {
+        background: rgba(255, 193, 7, 0.1);
+        border-radius: 3px;
+    }
+
+    .nav-scrollable::-webkit-scrollbar-thumb {
+        background: #ffc107;
+        border-radius: 3px;
+    }
+
+        .nav-scrollable::-webkit-scrollbar-thumb:hover {
+            background: #ff8f00;
+        }
+
+    /* Анимации */
+    @@keyframes slideIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    }
+
+    .nav-link-yellow {
+        animation: slideIn 0.3s ease-out;
+    }
+
+    .nav-item:nth-child(1) .nav-link-yellow {
+        animation-delay: 0.1s;
+    }
+
+    .nav-item:nth-child(2) .nav-link-yellow {
+        animation-delay: 0.2s;
+    }
+
+    .nav-item:nth-child(3) .nav-link-yellow {
+        animation-delay: 0.3s;
+    }
+
+    .nav-item:nth-child(4) .nav-link-yellow {
+        animation-delay: 0.4s;
+    }
+</style>

@@ -1,0 +1,207 @@
+﻿@using CorpFileHub.Domain.Entities
+
+<div class="folder-tree-item">
+    <!-- Основной элемент папки -->
+    <div class="folder-item @(IsSelected ? "selected" : "")" @onclick="OnClick">
+        <div class="d-flex align-items-center">
+            <!-- Кнопка разворота/сворота -->
+            @if (HasChildren)
+            {
+                <button class="btn btn-sm btn-link p-0 me-2 expand-button" 
+                        @onclick="ToggleExpand" 
+                        @onclick:stopPropagation="true">
+                    <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right") text-warning"></i>
+                </button>
+            }
+            else
+            {
+                <span class="me-4"></span>
+            }
+            
+            <!-- Иконка папки -->
+            <i class="bi @(isExpanded ? "bi-folder2-open" : "bi-folder") me-2 text-warning"></i>
+            
+            <!-- Название папки -->
+            <span class="folder-name flex-grow-1">@Folder.Name</span>
+            
+            <!-- Меню папки (показывается при выборе) -->
+            @if (IsSelected)
+            {
+                <div class="folder-menu">
+                    <button class="btn btn-sm btn-link p-0 text-warning" 
+                            @onclick="OnContextMenu" 
+                            @onclick:stopPropagation="true"
+                            title="Меню папки">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Дочерние папки -->
+    @if (isExpanded && HasChildren)
+    {
+        <div class="folder-children">
+            @foreach (var childFolder in ChildFolders)
+            {
+                <FolderTreeItem Folder="childFolder" 
+                              AllFolders="AllFolders" 
+                              SelectedFolderId="SelectedFolderId"
+                              OnFolderSelect="OnFolderSelect" />
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .folder-tree-item {
+        margin-bottom: 0.25rem;
+    }
+
+    .expand-button {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none !important;
+        transition: transform 0.2s ease;
+    }
+
+    .expand-button:hover {
+        transform: scale(1.2);
+        background: rgba(255, 193, 7, 0.1) !important;
+        border-radius: 50%;
+    }
+
+    .folder-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #333;
+        user-select: none;
+    }
+
+    .folder-item.selected .folder-name {
+        color: white;
+        font-weight: 600;
+    }
+
+    .folder-children {
+        margin-left: 1.5rem;
+        padding-left: 0.75rem;
+        border-left: 2px solid rgba(255, 193, 7, 0.3);
+        position: relative;
+    }
+
+    .folder-children::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(to bottom, #ffc107, transparent);
+    }
+
+    .folder-menu {
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .folder-item:hover .folder-menu,
+    .folder-item.selected .folder-menu {
+        opacity: 1;
+    }
+
+    .folder-menu .btn:hover {
+        background: rgba(255, 255, 255, 0.2) !important;
+        border-radius: 50%;
+    }
+
+    /* Анимация разворота */
+    .folder-children {
+        animation: slideDown 0.3s ease-out;
+        transform-origin: top;
+    }
+
+    @@keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: scaleY(0);
+        }
+        to {
+            opacity: 1;
+            transform: scaleY(1);
+        }
+    }
+
+    /* Эффект при наведении */
+    .folder-item:not(.selected):hover {
+        background: rgba(255, 193, 7, 0.1);
+        box-shadow: inset 3px 0 0 #ffc107;
+    }
+</style>
+
+@code {
+    [Parameter] public Folder Folder { get; set; } = null!;
+    [Parameter] public List<Folder> AllFolders { get; set; } = new();
+    [Parameter] public int? SelectedFolderId { get; set; }
+    [Parameter] public EventCallback<int?> OnFolderSelect { get; set; }
+
+    private bool isExpanded = false;
+
+    private bool IsSelected => SelectedFolderId == Folder.Id;
+    
+    private bool HasChildren => ChildFolders.Any();
+    
+    private List<Folder> ChildFolders => 
+        AllFolders?.Where(f => f.ParentFolderId == Folder.Id)
+                  .OrderBy(f => f.Name)
+                  .ToList() ?? new();
+
+    protected override void OnParametersSet()
+    {
+        // Автоматически разворачиваем папку, если выбрана дочерняя папка
+        if (SelectedFolderId.HasValue && IsParentOfSelected())
+        {
+            isExpanded = true;
+        }
+    }
+
+    private bool IsParentOfSelected()
+    {
+        if (!SelectedFolderId.HasValue) return false;
+        
+        var selectedFolder = AllFolders?.FirstOrDefault(f => f.Id == SelectedFolderId);
+        if (selectedFolder == null) return false;
+
+        // Проверяем путь от выбранной папки к корню
+        var current = selectedFolder;
+        while (current?.ParentFolderId != null)
+        {
+            if (current.ParentFolderId == Folder.Id)
+                return true;
+            current = AllFolders?.FirstOrDefault(f => f.Id == current.ParentFolderId);
+        }
+        
+        return false;
+    }
+
+    private async Task OnClick()
+    {
+        await OnFolderSelect.InvokeAsync(Folder.Id);
+    }
+
+    private async Task ToggleExpand()
+    {
+        isExpanded = !isExpanded;
+        StateHasChanged();
+    }
+
+    private void OnContextMenu()
+    {
+        // TODO: Показать контекстное меню для папки
+        Console.WriteLine($"Контекстное меню для папки: {Folder.Name}");
+    }
+}

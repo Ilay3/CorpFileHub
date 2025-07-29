@@ -1,0 +1,745 @@
+﻿@using CorpFileHub.Application.UseCases.Files
+@using Microsoft.AspNetCore.Components.Forms
+@inject UploadFileUseCase UploadFileUseCase
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible)
+{
+    <div class="modal-overlay">
+        <div class="modal-container-large">
+            <div class="modal-header-yellow">
+                <h5 class="modal-title">
+                    <i class="bi bi-cloud-upload text-warning me-2"></i>
+                    Загрузка файлов
+                </h5>
+                <button type="button" class="btn-close-yellow" @onclick="Cancel" disabled="@isUploading">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+
+            <div class="modal-body-yellow">
+                <!-- Ошибки -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert-yellow alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        @errorMessage
+                    </div>
+                }
+
+                <!-- Список выбранных файлов -->
+                @if (selectedFiles.Any())
+                {
+                    <div class="files-section">
+                        <h6 class="section-title">
+                            <i class="bi bi-files text-warning me-2"></i>
+                            Выбранные файлы (@selectedFiles.Count)
+                        </h6>
+                        <div class="files-list">
+                            @foreach (var file in selectedFiles)
+                            {
+                                <div class="file-item-upload">
+                                    <div class="file-icon-upload">
+                                        <i class="@GetFileIcon(file.Name)"></i>
+                                    </div>
+                                    <div class="file-info-upload">
+                                        <div class="file-name-upload">@file.Name</div>
+                                        <div class="file-size-upload">@FormatFileSize(file.Size)</div>
+                                    </div>
+                                    <div class="file-status-upload">
+                                        @if (uploadProgress.ContainsKey(file.Name))
+                                        {
+                                            var progress = uploadProgress[file.Name];
+                                            @if (progress.IsCompleted)
+                                            {
+                                                @if (progress.IsSuccess)
+                                                {
+                                                    <span class="status-badge success">
+                                                        <i class="bi bi-check-circle"></i> Загружен
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="status-badge error" title="@progress.ErrorMessage">
+                                                        <i class="bi bi-x-circle"></i> Ошибка
+                                                    </span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div class="progress-container">
+                                                    <div class="progress-bar-yellow" style="width: @(progress.Percentage)%"></div>
+                                                    <span class="progress-text">@(progress.Percentage)%</span>
+                                                </div>
+                                            }
+                                        }
+                                        else if (!isUploading)
+                                        {
+                                            <button class="btn-remove" @onclick="() => RemoveFile(file)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Комментарий -->
+                    <div class="form-group-yellow">
+                        <label for="uploadComment" class="form-label-yellow">
+                            Комментарий к загрузке
+                        </label>
+                        <textarea id="uploadComment"
+                                  class="form-control-yellow"
+                                  rows="2"
+                                  placeholder="Добавьте комментарий к загрузке (необязательно)"
+                                  @bind="uploadComment"
+                                  disabled="@isUploading"></textarea>
+                    </div>
+                }
+
+                <!-- Область для drag & drop -->
+                <div class="upload-dropzone @(isDragOver ? "drag-over" : "") @(selectedFiles.Any() ? "compact" : "")"
+                     @ondrop="HandleDrop"
+                     @ondragover="HandleDragOver"
+                     @ondragover:preventDefault="true"
+                     @ondragleave="HandleDragLeave"
+                     @onclick="TriggerFileSelect">
+
+                    <div class="dropzone-content">
+                        @if (selectedFiles.Any())
+                        {
+                            <i class="bi bi-plus-circle dropzone-icon"></i>
+                            <h6 class="dropzone-title">Добавить еще файлы</h6>
+                            <p class="dropzone-text">Перетащите файлы сюда или нажмите для выбора</p>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-upload dropzone-icon"></i>
+                            <h5 class="dropzone-title">Загрузите файлы</h5>
+                            <p class="dropzone-text">
+                                Перетащите файлы сюда или нажмите для выбора<br />
+                                <small>Максимальный размер файла: 100 МБ</small>
+                            </p>
+                        }
+                    </div>
+
+                    <InputFile @ref="fileInput"
+                               OnChange="HandleFileSelection"
+                               multiple="true"
+                               style="display: none;"
+                               accept=".docx,.xlsx,.pptx,.pdf,.txt,.jpg,.jpeg,.png,.gif,.bmp" />
+                </div>
+
+                <!-- Прогресс общей загрузки -->
+                @if (isUploading && selectedFiles.Any())
+                {
+                    <div class="upload-progress-section">
+                        <div class="progress-header">
+                            <span class="progress-label">Загрузка файлов...</span>
+                            <span class="progress-counter">@uploadedCount из @selectedFiles.Count</span>
+                        </div>
+                        <div class="overall-progress">
+                            <div class="overall-progress-bar" style="width: @(GetOverallProgress())%"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer-yellow">
+                <button type="button" class="btn-secondary-yellow" @onclick="Cancel" disabled="@isUploading">
+                    @if (isUploading)
+                    {
+                        <i class="bi bi-hourglass-split me-1"></i>
+                        <span>Загрузка...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-x-circle me-1"></i>
+                        <span>Отмена</span>
+                    }
+                </button>
+
+                @if (selectedFiles.Any() && !isUploading)
+                {
+                    <button type="button" class="btn-primary-yellow" @onclick="StartUpload">
+                        <i class="bi bi-cloud-upload me-1"></i>
+                        Загрузить (@selectedFiles.Count)
+                    </button>
+                }
+
+                @if (isUploading)
+                {
+                    <button type="button" class="btn-warning-yellow" @onclick="CancelUpload">
+                        <i class="bi bi-stop-circle me-1"></i>
+                        Остановить
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-container-large {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 20px 60px rgba(255, 193, 7, 0.3);
+        border: 3px solid #ffc107;
+        width: 90%;
+        max-width: 700px;
+        max-height: 90vh;
+        overflow: hidden;
+        animation: slideIn 0.3s ease-out;
+    }
+
+    .files-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .files-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 2px solid rgba(255, 193, 7, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 193, 7, 0.05);
+    }
+
+    .file-item-upload {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem;
+        border-bottom: 1px solid rgba(255, 193, 7, 0.1);
+        transition: background-color 0.2s ease;
+    }
+
+        .file-item-upload:hover {
+            background: rgba(255, 193, 7, 0.1);
+        }
+
+        .file-item-upload:last-child {
+            border-bottom: none;
+        }
+
+    .file-icon-upload {
+        font-size: 1.5rem;
+        margin-right: 0.75rem;
+        width: 40px;
+        text-align: center;
+    }
+
+    .file-info-upload {
+        flex-grow: 1;
+        min-width: 0;
+    }
+
+    .file-name-upload {
+        font-weight: 500;
+        color: #333;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .file-size-upload {
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    .file-status-upload {
+        min-width: 120px;
+        text-align: right;
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+        .status-badge.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-badge.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+    .progress-container {
+        position: relative;
+        width: 100px;
+        height: 20px;
+        background: #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+        display: inline-block;
+    }
+
+    .progress-bar-yellow {
+        height: 100%;
+        background: linear-gradient(90deg, #ffc107, #ffeb3b);
+        transition: width 0.3s ease;
+        border-radius: 10px;
+    }
+
+    .progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .btn-remove {
+        background: transparent;
+        border: 1px solid #dc3545;
+        color: #dc3545;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .btn-remove:hover {
+            background: #dc3545;
+            color: white;
+            transform: scale(1.1);
+        }
+
+    .upload-dropzone {
+        border: 3px dashed rgba(255, 193, 7, 0.5);
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.05), rgba(255, 235, 59, 0.05));
+        margin-bottom: 1rem;
+    }
+
+        .upload-dropzone:hover {
+            border-color: #ffc107;
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 235, 59, 0.1));
+            transform: translateY(-2px);
+        }
+
+        .upload-dropzone.drag-over {
+            border-color: #ff8f00;
+            background: linear-gradient(135deg, rgba(255, 143, 0, 0.15), rgba(255, 193, 7, 0.15));
+            border-style: solid;
+            transform: scale(1.02);
+        }
+
+        .upload-dropzone.compact {
+            padding: 1rem;
+        }
+
+    .dropzone-content {
+        pointer-events: none;
+    }
+
+    .dropzone-icon {
+        font-size: 3rem;
+        color: #ffc107;
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .dropzone-title {
+        color: #333;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+    }
+
+    .dropzone-text {
+        color: #666;
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .upload-progress-section {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: rgba(255, 193, 7, 0.1);
+        border-radius: 8px;
+        border: 2px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .progress-label {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .progress-counter {
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .overall-progress {
+        height: 8px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .overall-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #ffc107, #ff8f00);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    .btn-warning-yellow {
+        background: #ff8f00;
+        border: 2px solid #ff8f00;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+    }
+
+        .btn-warning-yellow:hover {
+            background: #e65100;
+            border-color: #e65100;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(230, 81, 0, 0.4);
+        }
+
+    /* Анимация для модального окна */
+    @@keyframes slideIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+
+    }
+
+    /* Скроллбар для списка файлов */
+    .files-list::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .files-list::-webkit-scrollbar-track {
+        background: rgba(255, 193, 7, 0.1);
+        border-radius: 3px;
+    }
+
+    .files-list::-webkit-scrollbar-thumb {
+        background: #ffc107;
+        border-radius: 3px;
+    }
+
+        .files-list::-webkit-scrollbar-thumb:hover {
+            background: #ff8f00;
+        }
+</style>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public int FolderId { get; set; }
+    [Parameter] public EventCallback OnFilesUploaded { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private InputFile? fileInput;
+    private List<IBrowserFile> selectedFiles = new();
+    private Dictionary<string, UploadProgress> uploadProgress = new();
+    private string errorMessage = "";
+    private string uploadComment = "";
+    private bool isUploading = false;
+    private bool isDragOver = false;
+    private int uploadedCount = 0;
+    private CancellationTokenSource? cancellationTokenSource;
+
+    private readonly long maxFileSize = 100 * 1024 * 1024; // 100 MB
+    private readonly string[] allowedExtensions = {
+        ".docx", ".xlsx", ".pptx", ".pdf", ".txt",
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible)
+        {
+            ResetState();
+        }
+    }
+
+    private void ResetState()
+    {
+        selectedFiles.Clear();
+        uploadProgress.Clear();
+        errorMessage = "";
+        uploadComment = "";
+        isUploading = false;
+        uploadedCount = 0;
+        isDragOver = false;
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        errorMessage = "";
+
+        foreach (var file in e.GetMultipleFiles())
+        {
+            if (ValidateFile(file))
+            {
+                // Проверяем, нет ли уже такого файла
+                if (!selectedFiles.Any(f => f.Name == file.Name))
+                {
+                    selectedFiles.Add(file);
+                }
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task TriggerFileSelect()
+    {
+        if (!isUploading && fileInput != null)
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "arguments[0].click()", fileInput.Element);
+        }
+    }
+
+    private async Task HandleDrop(DragEventArgs e)
+    {
+        isDragOver = false;
+        StateHasChanged();
+
+        if (isUploading) return;
+
+        // В Blazor Server drag & drop файлов требует дополнительной реализации через JS
+        // Пока показываем уведомление
+        await JSRuntime.InvokeVoidAsync("alert", "Drag & Drop будет реализован в следующей версии. Используйте кнопку выбора файлов.");
+    }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        if (!isUploading)
+        {
+            isDragOver = true;
+        }
+    }
+
+    private void HandleDragLeave(DragEventArgs e)
+    {
+        isDragOver = false;
+    }
+
+    private bool ValidateFile(IBrowserFile file)
+    {
+        // Проверка размера
+        if (file.Size > maxFileSize)
+        {
+            errorMessage = $"Файл '{file.Name}' слишком большой. Максимальный размер: 100 МБ.";
+            return false;
+        }
+
+        // Проверка расширения
+        var extension = Path.GetExtension(file.Name).ToLower();
+        if (!allowedExtensions.Contains(extension))
+        {
+            errorMessage = $"Тип файла '{extension}' не поддерживается.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        uploadProgress.Remove(file.Name);
+        StateHasChanged();
+    }
+
+    private async Task StartUpload()
+    {
+        if (isUploading || !selectedFiles.Any()) return;
+
+        isUploading = true;
+        uploadedCount = 0;
+        cancellationTokenSource = new CancellationTokenSource();
+        errorMessage = "";
+
+        try
+        {
+            var uploadTasks = selectedFiles.Select(file => UploadSingleFile(file, cancellationTokenSource.Token));
+            await Task.WhenAll(uploadTasks);
+
+            if (uploadedCount > 0)
+            {
+                await OnFilesUploaded.InvokeAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            errorMessage = "Загрузка была отменена.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Произошла ошибка при загрузке: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+            cancellationTokenSource?.Dispose();
+            cancellationTokenSource = null;
+        }
+    }
+
+    private async Task UploadSingleFile(IBrowserFile file, CancellationToken cancellationToken)
+    {
+        var progress = new UploadProgress();
+        uploadProgress[file.Name] = progress;
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxFileSize, cancellationToken);
+
+            // Симуляция прогресса загрузки
+            for (int i = 0; i <= 100; i += 20)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                progress.Percentage = i;
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(200, cancellationToken);
+            }
+
+            // TODO: Получить текущего пользователя
+            var userId = 1; // Временно
+
+            var uploadedFile = await UploadFileUseCase.ExecuteAsync(
+                stream,
+                file.Name,
+                FolderId,
+                userId,
+                uploadComment);
+
+            progress.IsCompleted = true;
+            progress.IsSuccess = true;
+            uploadedCount++;
+        }
+        catch (OperationCanceledException)
+        {
+            progress.IsCompleted = true;
+            progress.IsSuccess = false;
+            progress.ErrorMessage = "Отменено";
+            throw;
+        }
+        catch (Exception ex)
+        {
+            progress.IsCompleted = true;
+            progress.IsSuccess = false;
+            progress.ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CancelUpload()
+    {
+        cancellationTokenSource?.Cancel();
+    }
+
+    private async Task Cancel()
+    {
+        if (isUploading)
+        {
+            cancellationTokenSource?.Cancel();
+        }
+
+        await OnCancel.InvokeAsync();
+    }
+
+    private double GetOverallProgress()
+    {
+        if (!selectedFiles.Any()) return 0;
+
+        var totalProgress = uploadProgress.Values.Sum(p => p.Percentage);
+        return totalProgress / selectedFiles.Count;
+    }
+
+    private string GetFileIcon(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension switch
+        {
+            ".docx" or ".doc" => "bi bi-file-earmark-word text-primary",
+            ".xlsx" or ".xls" => "bi bi-file-earmark-excel text-success",
+            ".pptx" or ".ppt" => "bi bi-file-earmark-ppt text-warning",
+            ".pdf" => "bi bi-file-earmark-pdf text-danger",
+            ".txt" => "bi bi-file-earmark-text text-secondary",
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" => "bi bi-file-earmark-image text-info",
+            _ => "bi bi-file-earmark text-secondary"
+        };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+
+        return $"{number:n1} {suffixes[counter]}";
+    }
+
+    public class UploadProgress
+    {
+        public int Percentage { get; set; } = 0;
+        public bool IsCompleted { get; set; } = false;
+        public bool IsSuccess { get; set; } = false;
+        public string ErrorMessage { get; set; } = "";
+    }
+}
