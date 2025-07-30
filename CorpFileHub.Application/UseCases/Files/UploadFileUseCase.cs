@@ -2,6 +2,8 @@
 using CorpFileHub.Domain.Interfaces.Repositories;
 using CorpFileHub.Domain.Interfaces.Services;
 using CorpFileHub.Domain.Enums;
+using Microsoft.Extensions.Configuration;
+using System.Linq;
 
 namespace CorpFileHub.Application.UseCases.Files
 {
@@ -13,6 +15,8 @@ namespace CorpFileHub.Application.UseCases.Files
         private readonly IFileStorageService _fileStorageService;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly INotificationService _notificationService;
+        private readonly long _maxFileSize;
+        private readonly HashSet<string> _allowedExtensions;
 
         public UploadFileUseCase(
             IFileRepository fileRepository,
@@ -20,7 +24,8 @@ namespace CorpFileHub.Application.UseCases.Files
             IYandexDiskService yandexDiskService,
             IFileStorageService fileStorageService,
             IAuditLogRepository auditLogRepository,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            Microsoft.Extensions.Configuration.IConfiguration configuration)
         {
             _fileRepository = fileRepository;
             _folderRepository = folderRepository;
@@ -28,6 +33,9 @@ namespace CorpFileHub.Application.UseCases.Files
             _fileStorageService = fileStorageService;
             _auditLogRepository = auditLogRepository;
             _notificationService = notificationService;
+
+            _maxFileSize = configuration.GetValue<long>("FileStorage:MaxFileSize", 104857600);
+            _allowedExtensions = configuration.GetSection("FileStorage:AllowedExtensions").Get<string[]>()?.Select(e => e.ToLower()).ToHashSet() ?? new HashSet<string>();
         }
 
         public async Task<FileItem> ExecuteAsync(Stream fileStream, string fileName, int folderId, int userId, string comment = "")
@@ -37,14 +45,21 @@ namespace CorpFileHub.Application.UseCases.Files
             if (folder == null)
                 throw new ArgumentException("Папка не найдена");
 
+            if (fileStream.Length > _maxFileSize)
+                throw new InvalidOperationException("Размер файла превышает допустимый предел");
+
+            var extension = Path.GetExtension(fileName).ToLower();
+            if (_allowedExtensions.Any() && !_allowedExtensions.Contains(extension))
+                throw new InvalidOperationException($"Формат '{extension}' не поддерживается");
+
             // 2. Проверяем уникальность имени файла
             if (await _fileRepository.FileExistsAsync(fileName, folderId))
             {
-                fileName = GenerateUniqueFileName(fileName, folderId);
+                fileName = await GenerateUniqueFileNameAsync(fileName, folderId);
             }
 
             // 3. Определяем путь и расширение
-            var extension = Path.GetExtension(fileName);
+            extension = Path.GetExtension(fileName);
             var contentType = GetContentType(extension);
             var yandexPath = $"{folder.YandexDiskPath}/{fileName}";
 
@@ -114,7 +129,7 @@ namespace CorpFileHub.Application.UseCases.Files
             return createdFile;
         }
 
-        private string GenerateUniqueFileName(string originalName, int folderId)
+        private async Task<string> GenerateUniqueFileNameAsync(string originalName, int folderId)
         {
             var nameWithoutExt = Path.GetFileNameWithoutExtension(originalName);
             var extension = Path.GetExtension(originalName);
@@ -125,7 +140,7 @@ namespace CorpFileHub.Application.UseCases.Files
             {
                 newName = $"{nameWithoutExt}_{counter}{extension}";
                 counter++;
-            } while (_fileRepository.FileExistsAsync(newName, folderId).Result);
+            } while (await _fileRepository.FileExistsAsync(newName, folderId));
 
             return newName;
         }

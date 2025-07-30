@@ -1,0 +1,97 @@
+@page "/search"
+@using CorpFileHub.Application.DTOs
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>Поиск файлов</PageTitle>
+
+<h3 class="mb-3">Поиск файлов</h3>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <input class="form-control" placeholder="Название или текст" @bind="search.Query" />
+            </div>
+            <div class="col-md-2">
+                <input type="date" class="form-control" @bind="search.DateFrom" />
+            </div>
+            <div class="col-md-2">
+                <input type="date" class="form-control" @bind="search.DateTo" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" placeholder="Расширение" @bind="search.Extension" />
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" placeholder="Владелец" @bind="search.Owner" />
+            </div>
+            <div class="col-md-4">
+                <input class="form-control" placeholder="Теги" @bind="search.Tags" />
+            </div>
+            <div class="col-md-2">
+                <input type="number" class="form-control" placeholder="Мин. размер (Б)" @bind="search.MinSize" />
+            </div>
+            <div class="col-md-2">
+                <input type="number" class="form-control" placeholder="Макс. размер (Б)" @bind="search.MaxSize" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-yellow w-100" @onclick="PerformSearch">Искать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (results == null)
+{
+    <p>Введите параметры поиска и нажмите "Искать"</p>
+}
+else if (results.Count == 0)
+{
+    <p>Ничего не найдено</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Размер</th>
+                <th>Дата</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var file in results)
+            {
+                <tr>
+                    <td>@file.Name</td>
+                    <td>@file.FormattedSize</td>
+                    <td>@file.UpdatedAt.ToLocalTime().ToString("g")</td>
+                    <td>
+                        <button class="btn btn-link" @onclick="() => Download(file.Id)"><i class="bi bi-download"></i></button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private FileSearchDto search = new();
+    private List<FileDto>? results;
+
+    private async Task PerformSearch()
+    {
+        var url = $"api/files/search?query={Uri.EscapeDataString(search.Query ?? string.Empty)}" +
+                  $"&dateFrom={search.DateFrom:yyyy-MM-dd}&dateTo={search.DateTo:yyyy-MM-dd}" +
+                  $"&extension={search.Extension}&owner={search.Owner}&tags={search.Tags}" +
+                  $"&minSize={search.MinSize}&maxSize={search.MaxSize}";
+        results = await Http.GetFromJsonAsync<List<FileDto>>(url);
+    }
+
+    private void Download(int id)
+    {
+        JS.InvokeVoidAsync("open", $"/api/files/{id}/download", "_blank");
+    }
+}

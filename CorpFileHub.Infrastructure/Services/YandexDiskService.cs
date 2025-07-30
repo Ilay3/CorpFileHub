@@ -9,7 +9,8 @@ namespace CorpFileHub.Infrastructure.Services
     public class YandexDiskService : IYandexDiskService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _accessToken;
+        private string _accessToken;
+        private readonly string _refreshToken;
         private readonly string _apiBaseUrl;
         private readonly ILogger<YandexDiskService> _logger;
 
@@ -17,6 +18,7 @@ namespace CorpFileHub.Infrastructure.Services
         {
             _httpClient = new HttpClient();
             _accessToken = configuration["YandexDisk:AccessToken"]!;
+            _refreshToken = configuration["YandexDisk:RefreshToken"] ?? string.Empty;
             _apiBaseUrl = configuration["YandexDisk:ApiBaseUrl"]!;
             _logger = logger;
 
@@ -149,6 +151,28 @@ namespace CorpFileHub.Infrastructure.Services
             }
         }
 
+        public async Task<string> GetDownloadLinkAsync(string filePath)
+        {
+            try
+            {
+                var downloadUrlResponse = await _httpClient.GetAsync($"{_apiBaseUrl}/resources/download?path={Uri.EscapeDataString(filePath)}");
+
+                if (!downloadUrlResponse.IsSuccessStatusCode)
+                {
+                    var error = await downloadUrlResponse.Content.ReadAsStringAsync();
+                    throw new Exception($"Ошибка получения URL для скачивания: {error}");
+                }
+
+                var downloadUrlData = JsonConvert.DeserializeObject<dynamic>(await downloadUrlResponse.Content.ReadAsStringAsync());
+                return downloadUrlData.href;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка получения ссылки скачивания {filePath}");
+                return string.Empty;
+            }
+        }
+
         public async Task<bool> FileExistsAsync(string filePath)
         {
             try
@@ -220,6 +244,49 @@ namespace CorpFileHub.Infrastructure.Services
             {
                 _logger.LogWarning(ex, $"Не удалось создать папку {folderPath}");
             }
+        }
+
+        /// <summary>
+        /// Обновляет access token с использованием refresh token.
+        /// </summary>
+        public async Task<bool> RefreshAccessTokenAsync(string clientId, string clientSecret)
+        {
+            if (string.IsNullOrEmpty(_refreshToken))
+                return false;
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://oauth.yandex.ru/token")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "refresh_token",
+                    ["refresh_token"] = _refreshToken,
+                    ["client_id"] = clientId,
+                    ["client_secret"] = clientSecret
+                })
+            };
+
+            try
+            {
+                var response = await _httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var data = JsonConvert.DeserializeObject<dynamic>(content);
+                    if (data.access_token != null)
+                    {
+                        _accessToken = data.access_token;
+                        _httpClient.DefaultRequestHeaders.Remove("Authorization");
+                        _httpClient.DefaultRequestHeaders.Add("Authorization", $"OAuth {_accessToken}");
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не удалось обновить токен доступа Яндекс.Диска");
+            }
+
+            return false;
         }
 
         public void Dispose()

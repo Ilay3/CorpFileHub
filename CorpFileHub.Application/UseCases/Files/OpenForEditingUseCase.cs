@@ -1,6 +1,7 @@
-﻿using CorpFileHub.Domain.Interfaces.Repositories;
+using CorpFileHub.Domain.Interfaces.Repositories;
 using CorpFileHub.Domain.Interfaces.Services;
 using CorpFileHub.Domain.Enums;
+using CorpFileHub.Application.Services;
 
 namespace CorpFileHub.Application.UseCases.Files
 {
@@ -9,39 +10,34 @@ namespace CorpFileHub.Application.UseCases.Files
         private readonly IFileRepository _fileRepository;
         private readonly IYandexDiskService _yandexDiskService;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly IFileManagementService _fileManagementService;
 
         public OpenForEditingUseCase(
             IFileRepository fileRepository,
             IYandexDiskService yandexDiskService,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository,
+            IFileManagementService fileManagementService)
         {
             _fileRepository = fileRepository;
             _yandexDiskService = yandexDiskService;
             _auditLogRepository = auditLogRepository;
+            _fileManagementService = fileManagementService;
         }
 
         public async Task<string> ExecuteAsync(int fileId, int userId)
         {
-            // 1. Получаем файл
             var file = await _fileRepository.GetByIdAsync(fileId);
             if (file == null || file.IsDeleted)
                 throw new ArgumentException("Файл не найден");
 
-            // 2. Проверяем поддерживаемые форматы
             var supportedExtensions = new[] { ".docx", ".xlsx", ".pptx" };
             if (!supportedExtensions.Contains(file.Extension.ToLower()))
                 throw new InvalidOperationException("Формат файла не поддерживается для онлайн-редактирования");
 
-            // 3. TODO: Проверяем права доступа
+            await _fileManagementService.MarkFileAsEditingAsync(fileId, userId);
 
-            // 4. Обновляем статус файла
-            file.Status = FileStatus.InEditing;
-            await _fileRepository.UpdateAsync(file);
-
-            // 5. Получаем ссылку для редактирования
             var editLink = await _yandexDiskService.GetEditLinkAsync(file.YandexDiskPath);
 
-            // 6. Создаем аудит лог
             await _auditLogRepository.CreateAsync(new Domain.Entities.AuditLog
             {
                 UserId = userId,

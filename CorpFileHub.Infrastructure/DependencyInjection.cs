@@ -22,6 +22,9 @@ namespace CorpFileHub.Infrastructure
             services.AddScoped<IFileRepository, FileRepository>();
             services.AddScoped<IFolderRepository, FolderRepository>();
             services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+            services.AddScoped<IAuthLogRepository, AuthLogRepository>();
+            services.AddScoped<IUnauthorizedAccessLogRepository, UnauthorizedAccessLogRepository>();
+            services.AddScoped<ISystemErrorLogRepository, SystemErrorLogRepository>();
 
             // Регистрация внешних сервисов
             services.AddScoped<IYandexDiskService, YandexDiskService>();

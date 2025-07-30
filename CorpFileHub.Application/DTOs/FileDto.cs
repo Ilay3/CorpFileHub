@@ -119,6 +119,8 @@ namespace CorpFileHub.Application.DTOs
         public string? Extension { get; set; }
         public string? Owner { get; set; }
         public string? Tags { get; set; }
+        public long? MinSize { get; set; }
+        public long? MaxSize { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 50;
     }

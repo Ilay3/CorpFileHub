@@ -19,21 +19,36 @@ namespace CorpFileHub.Application.Services
 
         Task LogSystemActionAsync(AuditAction action, string description = "", string? errorMessage = null);
 
+        Task LogLoginAttemptAsync(int? userId, bool isLogin, bool isSuccess, string? errorMessage = null);
+
+        Task LogUnauthorizedAttemptAsync(int? userId, string action, string entityType, int? entityId = null, string description = "");
+
+        Task LogSystemErrorAsync(string message, string? details = null);
+
         Task<bool> CleanupOldLogsAsync(int retentionDays = 365);
     }
 
     public class AuditService : IAuditService
     {
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly IAuthLogRepository _authLogRepository;
+        private readonly IUnauthorizedAccessLogRepository _unauthorizedRepository;
+        private readonly ISystemErrorLogRepository _systemErrorRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AuditService> _logger;
 
         public AuditService(
             IAuditLogRepository auditLogRepository,
+            IAuthLogRepository authLogRepository,
+            IUnauthorizedAccessLogRepository unauthorizedRepository,
+            ISystemErrorLogRepository systemErrorRepository,
             IHttpContextAccessor httpContextAccessor,
             ILogger<AuditService> logger)
         {
             _auditLogRepository = auditLogRepository;
+            _authLogRepository = authLogRepository;
+            _unauthorizedRepository = unauthorizedRepository;
+            _systemErrorRepository = systemErrorRepository;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
         }
@@ -126,19 +141,83 @@ namespace CorpFileHub.Application.Services
             }
         }
 
+        public async Task LogLoginAttemptAsync(int? userId, bool isLogin, bool isSuccess, string? errorMessage = null)
+        {
+            try
+            {
+                var log = new LoginLog
+                {
+                    UserId = userId,
+                    IsLogin = isLogin,
+                    IsSuccess = isSuccess,
+                    ErrorMessage = errorMessage,
+                    IpAddress = GetClientIpAddress(),
+                    UserAgent = GetUserAgent(),
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _authLogRepository.CreateAsync(log);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка записи лога аутентификации");
+            }
+        }
+
+        public async Task LogUnauthorizedAttemptAsync(int? userId, string action, string entityType, int? entityId = null, string description = "")
+        {
+            try
+            {
+                var log = new UnauthorizedAccessLog
+                {
+                    UserId = userId,
+                    Action = action,
+                    EntityType = entityType,
+                    EntityId = entityId,
+                    Description = description,
+                    IpAddress = GetClientIpAddress(),
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _unauthorizedRepository.CreateAsync(log);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка записи лога несанкционированного доступа");
+            }
+        }
+
+        public async Task LogSystemErrorAsync(string message, string? details = null)
+        {
+            try
+            {
+                var log = new SystemErrorLog
+                {
+                    Message = message,
+                    Details = details,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _systemErrorRepository.CreateAsync(log);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка записи системной ошибки");
+            }
+        }
+
         public async Task<bool> CleanupOldLogsAsync(int retentionDays = 365)
         {
             try
             {
                 var cutoffDate = DateTime.UtcNow.AddDays(-retentionDays);
 
-                // TODO: Добавить метод в репозиторий для удаления старых записей
-                // var deletedCount = await _auditLogRepository.DeleteOldLogsAsync(cutoffDate);
+                var deletedCount = await _auditLogRepository.DeleteOlderThanAsync(cutoffDate);
 
                 await LogSystemActionAsync(AuditAction.SystemBackup,
-                    $"Очистка журнала аудита (записи старше {retentionDays} дней)");
+                    $"Очистка журнала аудита (удалено {deletedCount} записей старше {retentionDays} дней)");
 
-                _logger.LogInformation("Выполнена очистка журнала аудита для записей старше {Days} дней", retentionDays);
+                _logger.LogInformation(
+                    "Выполнена очистка журнала аудита: удалено {Count} записей старше {Days} дней",
+                    deletedCount, retentionDays);
                 return true;
             }
             catch (Exception ex)

@@ -85,5 +85,17 @@ namespace CorpFileHub.Infrastructure.Repositories
                 .OrderByDescending(a => a.CreatedAt)
                 .ToListAsync();
         }
+
+        public async Task<int> DeleteOlderThanAsync(DateTime cutoffDate)
+        {
+            var oldLogs = _context.AuditLogs.Where(a => a.CreatedAt < cutoffDate);
+            var count = await oldLogs.CountAsync();
+            if (count > 0)
+            {
+                _context.AuditLogs.RemoveRange(oldLogs);
+                await _context.SaveChangesAsync();
+            }
+            return count;
+        }
     }
 }

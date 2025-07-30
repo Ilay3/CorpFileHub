@@ -1,5 +1,65 @@
-﻿<h3>FileTree</h3>
+@inject HttpClient Http
+
+<div class="file-tree">
+    <div class="root-item @(SelectedFolderId == null ? "selected" : "")" @onclick="() => OnFolderClick(null)">
+        <i class="bi bi-hdd-fill me-1"></i> Корень
+    </div>
+
+    @if (isLoading)
+    {
+        <p>Загрузка...</p>
+    }
+    else
+    {
+        @foreach (var folder in Folders)
+        {
+            <FolderTreeItem Folder="folder"
+                            AllFolders="Folders"
+                            SelectedFolderId="SelectedFolderId"
+                            OnFolderSelect="OnFolderClick"
+                            OnChanged="ReloadTree" />
+        }
+    }
+</div>
 
 @code {
+    [Parameter] public int? SelectedFolderId { get; set; }
+    [Parameter] public EventCallback<int?> SelectedFolderIdChanged { get; set; }
+    [Parameter] public EventCallback<int?> OnFolderSelected { get; set; }
 
+    private List<FolderTreeDto> Folders = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTree();
+    }
+
+    private async Task LoadTree()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<FolderTreeDto>>("api/folders/tree");
+            if (result != null)
+            {
+                Folders = result;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnFolderClick(int? id)
+    {
+        SelectedFolderId = id;
+        await SelectedFolderIdChanged.InvokeAsync(id);
+        await OnFolderSelected.InvokeAsync(id);
+    }
+
+    private async Task ReloadTree()
+    {
+        await LoadTree();
+    }
 }

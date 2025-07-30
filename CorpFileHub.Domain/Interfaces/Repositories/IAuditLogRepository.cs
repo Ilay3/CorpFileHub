@@ -10,5 +10,12 @@ namespace CorpFileHub.Domain.Interfaces.Repositories
         Task<IEnumerable<AuditLog>> GetByActionAsync(AuditAction action, DateTime? from = null, DateTime? to = null);
         Task<IEnumerable<AuditLog>> GetByEntityAsync(string entityType, int entityId);
         Task<IEnumerable<AuditLog>> SearchAsync(string searchTerm, DateTime? from = null, DateTime? to = null);
+
+        /// <summary>
+        /// Удаляет записи аудита старше указанной даты
+        /// </summary>
+        /// <param name="cutoffDate">Граница даты</param>
+        /// <returns>Количество удалённых записей</returns>
+        Task<int> DeleteOlderThanAsync(DateTime cutoffDate);
     }
 }

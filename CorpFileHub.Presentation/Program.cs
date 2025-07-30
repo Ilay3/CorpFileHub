@@ -40,6 +40,7 @@ builder.Services.AddSignalR();
 
 // Контроллеры для API
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 
 // Настройка сессий
 builder.Services.AddSession(options =>

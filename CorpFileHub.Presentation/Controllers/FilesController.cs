@@ -3,6 +3,9 @@ using CorpFileHub.Application.UseCases.Files;
 using CorpFileHub.Application.Services;
 using CorpFileHub.Domain.Interfaces.Repositories;
 using CorpFileHub.Application.DTOs;
+using Microsoft.AspNetCore.Http;
+using System.IO;
+using CorpFileHub.Domain.Enums;
 
 namespace CorpFileHub.Presentation.Controllers
 {
@@ -13,33 +16,45 @@ namespace CorpFileHub.Presentation.Controllers
         private readonly UploadFileUseCase _uploadFileUseCase;
         private readonly DownloadFileUseCase _downloadFileUseCase;
         private readonly OpenForEditingUseCase _openForEditingUseCase;
+        private readonly GetPreviewLinkUseCase _getPreviewLinkUseCase;
         private readonly DeleteFileUseCase _deleteFileUseCase;
         private readonly RollbackFileVersionUseCase _rollbackVersionUseCase;
+        private readonly RestoreFileUseCase _restoreFileUseCase;
         private readonly IFileManagementService _fileManagementService;
         private readonly IFileRepository _fileRepository;
         private readonly IAuditService _auditService;
         private readonly ILogger<FilesController> _logger;
+        private readonly IUserContextService _userContext;
+        private readonly IUserRepository _userRepository;
 
         public FilesController(
             UploadFileUseCase uploadFileUseCase,
             DownloadFileUseCase downloadFileUseCase,
             OpenForEditingUseCase openForEditingUseCase,
+            GetPreviewLinkUseCase getPreviewLinkUseCase,
             DeleteFileUseCase deleteFileUseCase,
             RollbackFileVersionUseCase rollbackVersionUseCase,
+            RestoreFileUseCase restoreFileUseCase,
             IFileManagementService fileManagementService,
             IFileRepository fileRepository,
+            IUserRepository userRepository,
             IAuditService auditService,
-            ILogger<FilesController> logger)
+            ILogger<FilesController> logger,
+            IUserContextService userContext)
         {
             _uploadFileUseCase = uploadFileUseCase;
             _downloadFileUseCase = downloadFileUseCase;
             _openForEditingUseCase = openForEditingUseCase;
+            _getPreviewLinkUseCase = getPreviewLinkUseCase;
             _deleteFileUseCase = deleteFileUseCase;
             _rollbackVersionUseCase = rollbackVersionUseCase;
+            _restoreFileUseCase = restoreFileUseCase;
             _fileManagementService = fileManagementService;
             _fileRepository = fileRepository;
+            _userRepository = userRepository;
             _auditService = auditService;
             _logger = logger;
+            _userContext = userContext;
         }
 
         /// <summary>
@@ -54,8 +69,12 @@ namespace CorpFileHub.Presentation.Controllers
                 if (file == null || file.Length == 0)
                     return BadRequest(new { error = "Файл не выбран или пуст" });
 
-                // TODO: Получить текущего пользователя из системы аутентификации
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                {
+                    await _auditService.LogUnauthorizedAttemptAsync(null, "UploadFile", "File", null, "Неавторизованный пользователь");
+                    return Unauthorized();
+                }
 
                 using var stream = file.OpenReadStream();
                 var uploadedFile = await _uploadFileUseCase.ExecuteAsync(stream, file.FileName, folderId, userId, comment);
@@ -89,8 +108,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var (fileStream, fileName, contentType) = await _downloadFileUseCase.ExecuteAsync(id, userId);
 
@@ -120,8 +140,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var editLink = await _openForEditingUseCase.ExecuteAsync(id, userId);
 
@@ -152,6 +173,38 @@ namespace CorpFileHub.Presentation.Controllers
         }
 
         /// <summary>
+        /// Получение ссылки для предпросмотра файла
+        /// GET: api/files/{id}/preview
+        /// </summary>
+        [HttpGet("{id}/preview")]
+        public async Task<IActionResult> GetPreviewLink(int id)
+        {
+            try
+            {
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
+
+                var link = await _getPreviewLinkUseCase.ExecuteAsync(id, userId);
+
+                return Ok(new { success = true, previewLink = link });
+            }
+            catch (ArgumentException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка получения предпросмотра файла {FileId}", id);
+                return StatusCode(500, new { error = "Ошибка при получении предпросмотра" });
+            }
+        }
+
+        /// <summary>
         /// Удаление файла
         /// DELETE: api/files/{id}
         /// </summary>
@@ -160,8 +213,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var success = await _deleteFileUseCase.ExecuteAsync(id, userId);
 
@@ -186,6 +240,40 @@ namespace CorpFileHub.Presentation.Controllers
         }
 
         /// <summary>
+        /// Восстановление удаленного файла
+        /// POST: api/files/{id}/restore
+        /// </summary>
+        [HttpPost("{id}/restore")]
+        public async Task<IActionResult> RestoreFile(int id)
+        {
+            try
+            {
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
+
+                var success = await _restoreFileUseCase.ExecuteAsync(id, userId);
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Файл восстановлен" });
+                }
+                else
+                {
+                    return NotFound(new { error = "Файл не найден" });
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка восстановления файла {FileId}", id);
+                return StatusCode(500, new { error = "Ошибка при восстановлении файла" });
+            }
+        }
+
+        /// <summary>
         /// Получение информации о файле
         /// GET: api/files/{id}
         /// </summary>
@@ -194,8 +282,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var file = await _fileManagementService.GetFileWithAccessCheckAsync(id, userId);
                 if (file == null)
@@ -238,8 +327,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var versions = await _fileManagementService.GetFileVersionsAsync(id, userId);
 
@@ -265,6 +355,35 @@ namespace CorpFileHub.Presentation.Controllers
         }
 
         /// <summary>
+        /// Скачивание конкретной версии файла
+        /// GET: api/files/{id}/versions/{versionId}/download
+        /// </summary>
+        [HttpGet("{id}/versions/{versionId}/download")]
+        public async Task<IActionResult> DownloadFileVersion(int id, int versionId)
+        {
+            try
+            {
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
+
+                var result = await _fileManagementService.GetFileVersionStreamAsync(id, versionId, userId);
+                if (result == null)
+                    return NotFound(new { error = "Версия не найдена" });
+
+                var (stream, fileName, contentType) = result.Value;
+                var ext = Path.GetExtension(fileName);
+                var downloadName = $"{Path.GetFileNameWithoutExtension(fileName)}_v{versionId}{ext}";
+                return File(stream, contentType, downloadName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка скачивания версии файла {FileId}", id);
+                return StatusCode(500, new { error = "Ошибка при скачивании версии" });
+            }
+        }
+
+        /// <summary>
         /// Откат к версии файла
         /// POST: api/files/{id}/rollback/{versionId}
         /// </summary>
@@ -273,8 +392,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 // Найти номер версии по ID
                 var file = await _fileRepository.GetByIdAsync(id);
@@ -316,8 +436,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var success = await _fileManagementService.RenameFileAsync(id, request.NewName, userId);
 
@@ -346,8 +467,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var success = await _fileManagementService.MoveFileToFolderAsync(id, request.TargetFolderId, userId);
 
@@ -372,14 +494,40 @@ namespace CorpFileHub.Presentation.Controllers
         /// GET: api/files/search
         /// </summary>
         [HttpGet("search")]
-        public async Task<IActionResult> SearchFiles([FromQuery] string query, [FromQuery] int? folderId = null)
+        public async Task<IActionResult> SearchFiles([FromQuery] FileSearchDto search)
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
-                var files = await _fileManagementService.SearchUserFilesAsync(userId, query, new SearchFilters { FolderId = folderId });
+                var filters = new SearchFilters
+                {
+                    Query = search.Query,
+                    FolderId = search.FolderId,
+                    DateFrom = search.DateFrom,
+                    DateTo = search.DateTo,
+                    Extension = search.Extension,
+                    OwnerId = null,
+                    Tags = search.Tags,
+                    MinSize = search.MinSize,
+                    MaxSize = search.MaxSize
+                };
+
+                if (!string.IsNullOrWhiteSpace(search.Owner))
+                {
+                    var allUsers = await _userRepository.GetAllAsync();
+                    var owner = allUsers.FirstOrDefault(u =>
+                        u.FullName.Contains(search.Owner, StringComparison.OrdinalIgnoreCase) ||
+                        u.Email.Equals(search.Owner, StringComparison.OrdinalIgnoreCase));
+                    if (owner != null)
+                    {
+                        filters.OwnerId = owner.Id;
+                    }
+                }
+
+                var files = await _fileManagementService.SearchUserFilesAdvancedAsync(userId, filters);
 
                 var fileDtos = files.Select(f => new FileDto
                 {
@@ -392,6 +540,7 @@ namespace CorpFileHub.Presentation.Controllers
                     CreatedAt = f.CreatedAt,
                     UpdatedAt = f.UpdatedAt,
                     Status = f.Status,
+                    IsInEditing = f.Status == Domain.Enums.FileStatus.InEditing,
                     FolderName = f.Folder?.Name ?? "",
                     FolderId = f.FolderId
                 }).ToList();
@@ -400,7 +549,7 @@ namespace CorpFileHub.Presentation.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка поиска файлов по запросу {Query}", query);
+                _logger.LogError(ex, "Ошибка поиска файлов по запросу {Query}", search.Query);
                 return StatusCode(500, new { error = "Ошибка при поиске файлов" });
             }
         }
