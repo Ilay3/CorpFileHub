@@ -3,6 +3,7 @@ using CorpFileHub.Domain.Enums;
 using CorpFileHub.Domain.Interfaces.Repositories;
 using CorpFileHub.Domain.Interfaces.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -22,12 +23,19 @@ namespace CorpFileHub.Application.Services
         Task<bool> MoveFileToFolderAsync(int fileId, int targetFolderId, int userId);
         Task<bool> RenameFileAsync(int fileId, string newName, int userId);
         Task<List<FileItem>> SearchUserFilesAsync(int userId, string query, SearchFilters? filters = null);
+        Task<List<FileItem>> SearchUserFilesAdvancedAsync(int userId, SearchFilters filters);
         Task<bool> SetFileTagsAsync(int fileId, string tags, int userId);
         Task<bool> MarkFileAsEditingAsync(int fileId, int userId);
         Task<bool> UnmarkFileAsEditingAsync(int fileId, int userId);
         Task<List<FileItem>> GetRecentFilesAsync(int userId, int count = 10);
         Task<List<FileItem>> GetFavoriteFilesAsync(int userId);
         Task<bool> ToggleFavoriteAsync(int fileId, int userId);
+        Task<(Stream fileStream, string fileName, string contentType)?> GetFileVersionStreamAsync(int fileId, int versionId, int userId);
+
+        /// <summary>
+        /// Очистить старые версии файлов согласно политике хранения
+        /// </summary>
+        Task<int> CleanupOldVersionsAsync();
     }
 
     public class FileManagementService : IFileManagementService
@@ -38,6 +46,7 @@ namespace CorpFileHub.Application.Services
         private readonly IYandexDiskService _yandexDiskService;
         private readonly IAuditService _auditService;
         private readonly ILogger<FileManagementService> _logger;
+        private readonly IConfiguration _configuration;
 
         public FileManagementService(
             IFileRepository fileRepository,
@@ -45,7 +54,8 @@ namespace CorpFileHub.Application.Services
             IFileStorageService fileStorageService,
             IYandexDiskService yandexDiskService,
             IAuditService auditService,
-            ILogger<FileManagementService> logger)
+            ILogger<FileManagementService> logger,
+            IConfiguration configuration)
         {
             _fileRepository = fileRepository;
             _accessControlService = accessControlService;
@@ -53,6 +63,7 @@ namespace CorpFileHub.Application.Services
             _yandexDiskService = yandexDiskService;
             _auditService = auditService;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<FileItem?> GetFileWithAccessCheckAsync(int fileId, int userId)
@@ -134,6 +145,12 @@ namespace CorpFileHub.Application.Services
                 // Сохраняем версию локально
                 fileStream.Position = 0;
                 var localPath = await _fileStorageService.SaveFileVersionAsync(fileStream, fileId, newVersionNumber, file.Name);
+
+                // Деактивируем ранее активные версии
+                foreach (var v in file.Versions.Where(v => v.IsActive))
+                {
+                    v.IsActive = false;
+                }
 
                 var fileVersion = new FileVersion
                 {
@@ -403,6 +420,42 @@ namespace CorpFileHub.Application.Services
             }
         }
 
+        public async Task<List<FileItem>> SearchUserFilesAdvancedAsync(int userId, SearchFilters filters)
+        {
+            try
+            {
+                var searchResults = await _fileRepository.SearchAdvancedAsync(
+                    filters.Query,
+                    filters.FolderId,
+                    filters.DateFrom,
+                    filters.DateTo,
+                    filters.Extension,
+                    filters.OwnerId,
+                    filters.Tags,
+                    filters.MinSize,
+                    filters.MaxSize);
+
+                var accessibleFiles = new List<FileItem>();
+                foreach (var file in searchResults)
+                {
+                    if (await _accessControlService.CanReadFileAsync(file.Id, userId))
+                    {
+                        accessibleFiles.Add(file);
+                    }
+                }
+
+                await _auditService.LogSuccessAsync(userId, AuditAction.Search, "File", null,
+                    "", $"Расширенный поиск файлов по запросу '{filters.Query}'");
+
+                return accessibleFiles;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка расширенного поиска файлов для пользователя {UserId}", userId);
+                return new List<FileItem>();
+            }
+        }
+
         public async Task<bool> SetFileTagsAsync(int fileId, string tags, int userId)
         {
             try
@@ -510,6 +563,67 @@ namespace CorpFileHub.Application.Services
                 return false;
             }
         }
+
+        public async Task<(Stream fileStream, string fileName, string contentType)?> GetFileVersionStreamAsync(int fileId, int versionId, int userId)
+        {
+            try
+            {
+                var canRead = await _accessControlService.CanReadFileAsync(fileId, userId);
+                if (!canRead)
+                    return null;
+
+                var file = await _fileRepository.GetByIdAsync(fileId);
+                if (file == null)
+                    return null;
+
+                var version = file.Versions.FirstOrDefault(v => v.Id == versionId);
+                if (version == null)
+                    return null;
+
+                var stream = await _fileStorageService.GetFileVersionAsync(fileId, version.Version);
+                return (stream, file.Name, file.ContentType);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка получения версии файла {FileId}", fileId);
+                return null;
+            }
+        }
+
+        public async Task<int> CleanupOldVersionsAsync()
+        {
+            var retentionDays = _configuration.GetValue<int>("Versioning:RetentionDays", 365);
+            var maxVersions = _configuration.GetValue<int>("Versioning:MaxVersionsPerFile", 10);
+
+            try
+            {
+                var files = await _fileRepository.GetAllWithVersionsAsync();
+                var cutoffDate = DateTime.UtcNow.AddDays(-retentionDays);
+                int removed = 0;
+
+                foreach (var file in files)
+                {
+                    var ordered = file.Versions.OrderByDescending(v => v.CreatedAt).ToList();
+                    var keep = ordered.Take(maxVersions).ToList();
+                    keep.AddRange(ordered.Where(v => v.CreatedAt >= cutoffDate && !keep.Contains(v)));
+                    var toDelete = ordered.Except(keep).ToList();
+
+                    foreach (var version in toDelete)
+                    {
+                        await _fileStorageService.DeleteFileVersionAsync(file.Id, version.Version);
+                        await _fileRepository.DeleteFileVersionAsync(version.Id);
+                        removed++;
+                    }
+                }
+
+                return removed;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка очистки старых версий файлов");
+                return 0;
+            }
+        }
     }
 
     // Вспомогательные классы
@@ -534,10 +648,14 @@ namespace CorpFileHub.Application.Services
 
     public class SearchFilters
     {
+        public string? Query { get; set; }
         public int? FolderId { get; set; }
         public DateTime? DateFrom { get; set; }
         public DateTime? DateTo { get; set; }
         public string? Extension { get; set; }
         public string? Tags { get; set; }
+        public int? OwnerId { get; set; }
+        public long? MinSize { get; set; }
+        public long? MaxSize { get; set; }
     }
 }

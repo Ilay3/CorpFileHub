@@ -1,5 +1,116 @@
-﻿<h3>FileList</h3>
+@inject HttpClient Http
+
+@if (files == null)
+{
+    <p>Загрузка...</p>
+}
+else if (!files.Any())
+{
+    <p>Нет файлов</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Размер</th>
+                <th>Изменен</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var file in files)
+        {
+            <tr>
+                <td><i class="@file.FileIcon me-2"></i>@file.Name
+                    @if (file.IsInEditing)
+                    {
+                        <span class="badge bg-warning text-dark ms-2" title="Редактируется">✏️</span>
+                    }
+                </td>
+                <td>@file.FormattedSize</td>
+                <td>@file.UpdatedAt.ToLocalTime().ToString("g")</td>
+                <td>
+                    <button class="btn btn-link p-0 me-1" title="Предпросмотр" @onclick="() => PreviewFile(file.Id)">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn btn-link p-0 me-1" title="Скачать" @onclick="() => DownloadFile(file.Id)">
+                        <i class="bi bi-download"></i>
+                    </button>
+                    <a class="btn btn-link p-0 me-1" title="История" href="@($"/files/{file.Id}/history")">
+                        <i class="bi bi-clock-history"></i>
+                    </a>
+                    <a class="btn btn-link p-0 me-1" title="Права" href="@($"/files/{file.Id}/access")">
+                        <i class="bi bi-shield-lock"></i>
+                    </a>
+                    @if (file.CanEditOnline)
+                    {
+                        <button class="btn btn-link p-0" title="Редактировать" @onclick="() => EditFile(file.Id)">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
 
 @code {
+    [Parameter] public int? FolderId { get; set; }
 
+    private List<FileDto>? files;
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (FolderId.HasValue)
+        {
+            await LoadFiles(FolderId.Value);
+        }
+        else
+        {
+            files = new();
+        }
+    }
+
+    private async Task LoadFiles(int folderId)
+    {
+        files = null;
+        var result = await Http.GetFromJsonAsync<List<FileDto>>($"api/files/search?query=&folderId={folderId}");
+        files = result ?? new List<FileDto>();
+    }
+
+    private async Task PreviewFile(int fileId)
+    {
+        var response = await Http.GetFromJsonAsync<PreviewResponse>($"api/files/{fileId}/preview");
+        if (response != null && !string.IsNullOrEmpty(response.previewLink))
+        {
+            await JS.InvokeVoidAsync("open", response.previewLink, "_blank");
+        }
+    }
+
+    private void DownloadFile(int fileId)
+    {
+        var url = $"api/files/{fileId}/download";
+        JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task EditFile(int fileId)
+    {
+        var response = await Http.PostAsJsonAsync($"api/files/{fileId}/edit", (object?)null);
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<EditLinkResponse>();
+            if (result != null && !string.IsNullOrEmpty(result.editLink))
+            {
+                await JS.InvokeVoidAsync("open", result.editLink, "_blank");
+            }
+        }
+    }
+
+    private record PreviewResponse(string previewLink);
+    private record EditLinkResponse(string editLink);
 }

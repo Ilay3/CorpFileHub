@@ -82,6 +82,25 @@ namespace CorpFileHub.Infrastructure.Services
             await SendEmailAsync(userEmail, subject, message);
         }
 
+        public async Task SendPasswordResetAsync(string userEmail, string resetLink)
+        {
+            if (!_emailEnabled) return;
+
+            var subject = "[CorpFileHub] Сброс пароля";
+            var message = $@"
+                Для сброса пароля перейдите по ссылке:
+
+                {resetLink}
+
+                Если вы не запрашивали сброс пароля, проигнорируйте это сообщение.
+
+                ---
+                Автоматическое уведомление системы CorpFileHub
+                ";
+
+            await SendEmailAsync(userEmail, subject, message);
+        }
+
         public async Task SendErrorNotificationAsync(string adminEmail, string errorMessage, Exception exception)
         {
             if (!_emailEnabled) return;

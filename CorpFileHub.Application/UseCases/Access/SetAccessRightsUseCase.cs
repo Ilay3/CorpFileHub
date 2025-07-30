@@ -302,6 +302,39 @@ namespace CorpFileHub.Application.UseCases.Access
             return result;
         }
 
+        public async Task<List<UserAccessInfo>> GetFolderAccessListAsync(int folderId, int requesterId)
+        {
+            var requesterAccess = await _accessControlService.GetFolderAccessLevelAsync(folderId, requesterId);
+            if (requesterAccess < AccessLevel.Admin)
+                throw new UnauthorizedAccessException("Недостаточно прав для просмотра списка доступа");
+
+            var accessRules = await _accessControlService.GetFolderAccessRulesAsync(folderId);
+            var result = new List<UserAccessInfo>();
+
+            foreach (var rule in accessRules)
+            {
+                if (rule.UserId.HasValue)
+                {
+                    var user = await _userRepository.GetByIdAsync(rule.UserId.Value);
+                    if (user != null)
+                    {
+                        result.Add(new UserAccessInfo
+                        {
+                            UserId = user.Id,
+                            UserName = user.FullName,
+                            UserEmail = user.Email,
+                            AccessLevel = rule.AccessLevel,
+                            GrantedAt = rule.CreatedAt,
+                            ExpiresAt = rule.ExpiresAt,
+                            IsActive = rule.IsActive
+                        });
+                    }
+                }
+            }
+
+            return result;
+        }
+
         private async Task ApplyRightsToChildrenAsync(int folderId, int userId, AccessLevel accessLevel, int grantedBy)
         {
             // Получаем все дочерние папки

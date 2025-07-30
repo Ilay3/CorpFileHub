@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject UploadFileUseCase UploadFileUseCase
 @inject IJSRuntime JSRuntime
+@inject CorpFileHub.Application.Services.IUserContextService UserContext
 
 @if (IsVisible)
 {
@@ -649,8 +650,15 @@
                 await Task.Delay(200, cancellationToken);
             }
 
-            // TODO: Получить текущего пользователя
-            var userId = 1; // Временно
+            var userId = UserContext.GetCurrentUserId() ?? 0;
+            if (userId == 0)
+            {
+                progress.IsCompleted = true;
+                progress.IsSuccess = false;
+                progress.ErrorMessage = "Не авторизован";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
 
             var uploadedFile = await UploadFileUseCase.ExecuteAsync(
                 stream,

@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Local configuration
+CorpFileHub.Presentation/appsettings.json
+CorpFileHub.Presentation/Archive/
+
+packages-microsoft-prod.deb

@@ -3,6 +3,7 @@ using CorpFileHub.Application.UseCases.Folders;
 using CorpFileHub.Application.Services;
 using CorpFileHub.Domain.Interfaces.Repositories;
 using CorpFileHub.Application.DTOs;
+using Microsoft.AspNetCore.Http;
 
 namespace CorpFileHub.Presentation.Controllers
 {
@@ -18,6 +19,7 @@ namespace CorpFileHub.Presentation.Controllers
         private readonly IAccessControlService _accessControlService;
         private readonly IAuditService _auditService;
         private readonly ILogger<FoldersController> _logger;
+        private readonly IUserContextService _userContext;
 
         public FoldersController(
             CreateFolderUseCase createFolderUseCase,
@@ -27,7 +29,8 @@ namespace CorpFileHub.Presentation.Controllers
             IFileRepository fileRepository,
             IAccessControlService accessControlService,
             IAuditService auditService,
-            ILogger<FoldersController> logger)
+            ILogger<FoldersController> logger,
+            IUserContextService userContext)
         {
             _createFolderUseCase = createFolderUseCase;
             _deleteFolderUseCase = deleteFolderUseCase;
@@ -37,6 +40,7 @@ namespace CorpFileHub.Presentation.Controllers
             _accessControlService = accessControlService;
             _auditService = auditService;
             _logger = logger;
+            _userContext = userContext;
         }
 
         /// <summary>
@@ -51,8 +55,9 @@ namespace CorpFileHub.Presentation.Controllers
                 if (string.IsNullOrWhiteSpace(folderDto.Name))
                     return BadRequest(new { error = "Название папки не может быть пустым" });
 
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var createdFolder = await _createFolderUseCase.ExecuteAsync(
                     folderDto.Name,
@@ -98,8 +103,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var canRead = await _accessControlService.CanReadFolderAsync(id, userId);
                 if (!canRead)
@@ -153,8 +159,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var folders = await _folderRepository.GetByParentIdAsync(parentId);
                 var accessibleFolders = new List<FolderTreeDto>();
@@ -199,8 +206,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var canRead = await _accessControlService.CanReadFolderAsync(id, userId);
                 if (!canRead)
@@ -267,8 +275,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var success = await _deleteFolderUseCase.ExecuteAsync(id, userId, force);
 
@@ -305,8 +314,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var success = await _moveFolderUseCase.ExecuteAsync(id, moveDto.NewParentFolderId, userId);
 
@@ -343,8 +353,9 @@ namespace CorpFileHub.Presentation.Controllers
         {
             try
             {
-                // TODO: Получить текущего пользователя
-                var userId = 1; // Временно
+                var userId = _userContext.GetCurrentUserId() ?? 0;
+                if (userId == 0)
+                    return Unauthorized();
 
                 var canEdit = await _accessControlService.CanEditFolderAsync(id, userId);
                 if (!canEdit)

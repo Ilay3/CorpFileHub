@@ -15,6 +15,9 @@ namespace CorpFileHub.Infrastructure.Data
         public DbSet<FileVersion> FileVersions { get; set; }
         public DbSet<AccessRule> AccessRules { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<LoginLog> LoginLogs { get; set; }
+        public DbSet<UnauthorizedAccessLog> UnauthorizedAccessLogs { get; set; }
+        public DbSet<SystemErrorLog> SystemErrorLogs { get; set; }
         public DbSet<Group> Groups { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

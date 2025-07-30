@@ -1,4 +1,6 @@
-﻿@using CorpFileHub.Domain.Entities
+@using CorpFileHub.Application.DTOs
+@inject ILogger<FolderTreeItem> Logger
+@using CorpFileHub.Presentation.Components.FileExplorer
 
 <div class="folder-tree-item">
     <!-- Основной элемент папки -->
@@ -27,13 +29,22 @@
             <!-- Меню папки (показывается при выборе) -->
             @if (IsSelected)
             {
-                <div class="folder-menu">
-                    <button class="btn btn-sm btn-link p-0 text-warning" 
-                            @onclick="OnContextMenu" 
+                <div class="folder-menu position-relative">
+                    <button class="btn btn-sm btn-link p-0 text-warning"
+                            @onclick="OnContextMenu"
                             @onclick:stopPropagation="true"
                             title="Меню папки">
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
+                    @if (showMenu)
+                    {
+                        <ul class="context-menu list-unstyled" @onclick:stopPropagation="true">
+                            <li><button class="dropdown-item" @onclick="OpenRename">Переименовать</button></li>
+                            <li><button class="dropdown-item" @onclick="OpenMove">Переместить</button></li>
+                            <li><a class="dropdown-item" href="@($"/folders/{Folder.Id}/access")">Права</a></li>
+                            <li><button class="dropdown-item text-danger" @onclick="OpenDelete">Удалить</button></li>
+                        </ul>
+                    }
                 </div>
             }
         </div>
@@ -45,14 +56,19 @@
         <div class="folder-children">
             @foreach (var childFolder in ChildFolders)
             {
-                <FolderTreeItem Folder="childFolder" 
-                              AllFolders="AllFolders" 
+                <FolderTreeItem Folder="childFolder"
+                              AllFolders="AllFolders"
                               SelectedFolderId="SelectedFolderId"
-                              OnFolderSelect="OnFolderSelect" />
+                              OnFolderSelect="OnFolderSelect"
+                              OnChanged="OnChanged" />
             }
         </div>
     }
 </div>
+
+<RenameFolderModal IsVisible="showRename" FolderId="Folder.Id" CurrentName="Folder.Name" OnSuccess="OnOperationSuccess" OnCancel="CloseModals" />
+<MoveFolderModal IsVisible="showMove" FolderId="Folder.Id" Folders="AllFolders" OnSuccess="OnOperationSuccess" OnCancel="CloseModals" />
+<DeleteFolderModal IsVisible="showDelete" FolderId="Folder.Id" FolderName="Folder.Name" OnSuccess="OnOperationSuccess" OnCancel="CloseModals" />
 
 <style>
     .folder-tree-item {
@@ -107,6 +123,7 @@
     .folder-menu {
         opacity: 0;
         transition: opacity 0.2s ease;
+        position: relative;
     }
 
     .folder-item:hover .folder-menu,
@@ -117,6 +134,18 @@
     .folder-menu .btn:hover {
         background: rgba(255, 255, 255, 0.2) !important;
         border-radius: 50%;
+    }
+
+    .context-menu {
+        position: absolute;
+        right: 0;
+        top: 100%;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        padding: 0.25rem 0;
+        z-index: 1000;
     }
 
     /* Анимация разворота */
@@ -144,10 +173,11 @@
 </style>
 
 @code {
-    [Parameter] public Folder Folder { get; set; } = null!;
-    [Parameter] public List<Folder> AllFolders { get; set; } = new();
+    [Parameter] public FolderTreeDto Folder { get; set; } = null!;
+    [Parameter] public List<FolderTreeDto> AllFolders { get; set; } = new();
     [Parameter] public int? SelectedFolderId { get; set; }
     [Parameter] public EventCallback<int?> OnFolderSelect { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
 
     private bool isExpanded = false;
 
@@ -155,7 +185,7 @@
     
     private bool HasChildren => ChildFolders.Any();
     
-    private List<Folder> ChildFolders => 
+    private List<FolderTreeDto> ChildFolders =>
         AllFolders?.Where(f => f.ParentFolderId == Folder.Id)
                   .OrderBy(f => f.Name)
                   .ToList() ?? new();
@@ -199,9 +229,42 @@
         StateHasChanged();
     }
 
+    private bool showMenu = false;
+    private bool showRename = false;
+    private bool showMove = false;
+    private bool showDelete = false;
+
     private void OnContextMenu()
     {
-        // TODO: Показать контекстное меню для папки
-        Console.WriteLine($"Контекстное меню для папки: {Folder.Name}");
+        showMenu = !showMenu;
+    }
+
+    private void OpenRename()
+    {
+        showRename = true;
+        showMenu = false;
+    }
+
+    private void OpenMove()
+    {
+        showMove = true;
+        showMenu = false;
+    }
+
+    private void OpenDelete()
+    {
+        showDelete = true;
+        showMenu = false;
+    }
+
+    private void CloseModals()
+    {
+        showRename = showMove = showDelete = false;
+    }
+
+    private async Task OnOperationSuccess()
+    {
+        CloseModals();
+        await OnChanged.InvokeAsync();
     }
 }

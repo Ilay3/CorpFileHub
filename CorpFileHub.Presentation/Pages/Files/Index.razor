@@ -1,5 +1,25 @@
-﻿<h3>Index</h3>
+@page "/files"
+@using CorpFileHub.Application.DTOs
+
+<PageTitle>Мои документы</PageTitle>
+
+<h3 class="mb-3">Мои документы</h3>
+
+<div class="row">
+    <div class="col-3">
+        <FileTree SelectedFolderId="currentFolderId" OnFolderSelected="OnFolderSelected" />
+    </div>
+    <div class="col-9">
+        <FileList FolderId="currentFolderId" />
+    </div>
+</div>
 
 @code {
+    private int? currentFolderId = null;
 
+    private Task OnFolderSelected(int? folderId)
+    {
+        currentFolderId = folderId;
+        return Task.CompletedTask;
+    }
 }

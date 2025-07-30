@@ -1,8 +1,10 @@
-﻿@using CorpFileHub.Domain.Entities
+@using CorpFileHub.Domain.Entities
 @using CorpFileHub.Application.UseCases.Folders
 @using System.ComponentModel.DataAnnotations
 @inject CreateFolderUseCase CreateFolderUseCase
 @inject IJSRuntime JSRuntime
+@inject ILogger<CreateFolderModal> Logger
+@inject CorpFileHub.Application.Services.IUserContextService UserContext
 
 @if (IsVisible)
 {
@@ -417,8 +419,12 @@
 
         try
         {
-            // TODO: Получить текущего пользователя из системы аутентификации
-            var userId = 1; // Временно используем ID = 1
+            var userId = UserContext.GetCurrentUserId() ?? 0;
+            if (userId == 0)
+            {
+                errorMessage = "Не удалось определить пользователя";
+                return;
+            }
 
             var newFolder = await CreateFolderUseCase.ExecuteAsync(
                 model.Name.Trim(),
@@ -439,7 +445,7 @@
         catch (Exception ex)
         {
             errorMessage = "Произошла ошибка при создании папки. Попробуйте еще раз.";
-            Console.WriteLine($"Ошибка создания папки: {ex.Message}");
+            Logger.LogError(ex, "Ошибка создания папки");
         }
         finally
         {

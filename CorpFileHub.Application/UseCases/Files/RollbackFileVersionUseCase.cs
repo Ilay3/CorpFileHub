@@ -40,10 +40,17 @@ namespace CorpFileHub.Application.UseCases.Files
             using var versionStream = await _fileStorageService.GetFileVersionAsync(fileId, targetVersion);
 
             // 5. Загружаем версию обратно на Яндекс.Диск (заменяем текущий файл)
-            await _yandexDiskService.UploadFileAsync(versionStream, file.Name, Path.GetDirectoryName(file.YandexDiskPath) ?? "");
+            await _yandexDiskService.UploadFileAsync(versionStream, file.Name, Path.GetDirectoryName(file.YandexDiskPath) ?? string.Empty);
 
-            // 6. Создаем новую версию как "откат к версии X"
+            // 6. Создаем новую активную версию
             versionStream.Position = 0;
+
+            // Деактивируем текущую активную версию
+            foreach (var v in file.Versions.Where(v => v.IsActive))
+            {
+                v.IsActive = false;
+            }
+
             var newVersionNumber = file.Versions.Max(v => v.Version) + 1;
             var localPath = await _fileStorageService.SaveFileVersionAsync(versionStream, fileId, newVersionNumber, file.Name);
 
@@ -55,7 +62,9 @@ namespace CorpFileHub.Application.UseCases.Files
                 Version = newVersionNumber,
                 Size = versionStream.Length,
                 CreatedById = userId,
-                Comment = $"Откат к версии {targetVersion}. {comment}".Trim()
+                Comment = $"Откат к версии {targetVersion}. {comment}".Trim(),
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
             };
 
             file.Versions.Add(newVersion);
