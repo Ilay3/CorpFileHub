@@ -58,6 +58,8 @@ namespace CorpFileHub.Application.UseCases.Files
                 Comment = $"Откат к версии {targetVersion}. {comment}".Trim()
             };
 
+            file.Versions.Add(newVersion);
+
             // 7. Обновляем файл
             file.UpdatedAt = DateTime.UtcNow;
             await _fileRepository.UpdateAsync(file);

@@ -24,6 +24,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\CorpFileHub.Application\CorpFileHub.Application.csproj" />
 	  <ProjectReference Include="..\CorpFileHub.Domain\CorpFileHub.Domain.csproj" />
 	</ItemGroup>
 

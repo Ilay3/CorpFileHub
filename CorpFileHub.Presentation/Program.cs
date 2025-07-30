@@ -1,94 +1,115 @@
-using CorpFileHub.Infrastructure.Data;
+п»їusing CorpFileHub.Application;
 using CorpFileHub.Infrastructure;
-using CorpFileHub.Application;
-using CorpFileHub.Presentation.Components;
+using CorpFileHub.Infrastructure.Data;
+using CorpFileHub.Presentation.Hubs;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Настройка Serilog для логирования
+// РќР°СЃС‚СЂРѕР№РєР° Р»РѕРіРёСЂРѕРІР°РЅРёСЏ Serilog
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
+    .WriteTo.File(
+        path: builder.Configuration["Logging:File:Path"] ?? "./Logs/corpfilehub-.log",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
     .WriteTo.Console()
-    .WriteTo.File("./Logs/corpfilehub-.log", rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
 builder.Host.UseSerilog();
 
-// Добавление DbContext для PostgreSQL
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// Blazor Server
+// Р”РѕР±Р°РІР»РµРЅРёРµ СЃРµСЂРІРёСЃРѕРІ
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Регистрация сервисов приложения
+// HTTP Context Accessor РґР»СЏ Р°СѓРґРёС‚Р°
+builder.Services.AddHttpContextAccessor();
+
+// РџРѕРґРєР»СЋС‡РµРЅРёРµ Рє Р±Р°Р·Рµ РґР°РЅРЅС‹С…
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Р РµРіРёСЃС‚СЂР°С†РёСЏ СЃР»РѕРµРІ
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-// Добавляем контроллеры для тестирования
+// SignalR РґР»СЏ real-time РѕР±РЅРѕРІР»РµРЅРёР№
+builder.Services.AddSignalR();
+
+// РљРѕРЅС‚СЂРѕР»Р»РµСЂС‹ РґР»СЏ API
 builder.Services.AddControllers();
+
+// РќР°СЃС‚СЂРѕР№РєР° СЃРµСЃСЃРёР№
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(
+        builder.Configuration.GetValue<int>("Security:SessionTimeoutMinutes", 480));
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+// CORS РґР»СЏ API
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DefaultPolicy", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 
 var app = builder.Build();
 
-// Создание необходимых папок
-try
-{
-    var archivePath = builder.Configuration["FileStorage:ArchivePath"] ?? "./Archive";
-    var logsPath = "./Logs";
-
-    if (!Directory.Exists(archivePath))
-    {
-        Directory.CreateDirectory(archivePath);
-        Log.Information($"Создана папка архива: {archivePath}");
-    }
-
-    if (!Directory.Exists(logsPath))
-    {
-        Directory.CreateDirectory(logsPath);
-        Log.Information($"Создана папка логов: {logsPath}");
-    }
-}
-catch (Exception ex)
-{
-    Log.Error(ex, "Ошибка создания папок при запуске");
-}
-
-// Применение миграций БД при запуске (для разработки)
-try
-{
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        context.Database.EnsureCreated();
-        Log.Information("База данных проверена/создана");
-    }
-}
-catch (Exception ex)
-{
-    Log.Error(ex, "Ошибка инициализации базы данных");
-}
-
-// Configure the HTTP request pipeline
+// РќР°СЃС‚СЂРѕР№РєР° pipeline
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();
+    app.UseExceptionHandler("/Error");
+    if (builder.Configuration.GetValue<bool>("Security:RequireHttps", false))
+    {
+        app.UseHsts();
+        app.UseHttpsRedirection();
+    }
+}
+else
+{
+    app.UseDeveloperExceptionPage();
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+app.UseCors("DefaultPolicy");
+app.UseSession();
+
 app.UseAntiforgery();
 
-// Добавляем маршруты для контроллеров
-app.MapControllers();
-
-app.MapRazorComponents<App>()
+// РњР°СЂС€СЂСѓС‚С‹
+app.MapRazorComponents<CorpFileHub.Presentation.Components.App>()
     .AddInteractiveServerRenderMode();
 
-Log.Information("CorpFileHub запущен успешно");
+app.MapControllers();
+app.MapHub<FileOperationHub>("/fileOperationHub");
+
+// РџСЂРёРјРµРЅРµРЅРёРµ РјРёРіСЂР°С†РёР№ РїСЂРё Р·Р°РїСѓСЃРєРµ
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await context.Database.MigrateAsync();
+
+        Log.Information("Р‘Р°Р·Р° РґР°РЅРЅС‹С… СѓСЃРїРµС€РЅРѕ РѕР±РЅРѕРІР»РµРЅР°");
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "РћС€РёР±РєР° РїСЂРё РїСЂРёРјРµРЅРµРЅРёРё РјРёРіСЂР°С†РёР№ Р±Р°Р·С‹ РґР°РЅРЅС‹С…");
+        throw;
+    }
+}
+
+Log.Information("рџљЂ CorpFileHub Р·Р°РїСѓС‰РµРЅ РЅР° {Urls}", string.Join(", ", builder.Configuration["urls"]?.Split(';') ?? new[] { "http://localhost:5275" }));
 
 app.Run();

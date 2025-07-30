@@ -80,8 +80,15 @@ namespace CorpFileHub.Application.UseCases.Files
                 Version = 1,
                 Size = fileStream.Length,
                 CreatedById = userId,
-                Comment = comment
+                Comment = comment,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
             };
+
+            // Добавляем версию к файлу
+            createdFile.Versions.Add(fileVersion);
+            await _fileRepository.UpdateAsync(createdFile);
+
 
             // 7. Создаем аудит лог
             await _auditLogRepository.CreateAsync(new AuditLog

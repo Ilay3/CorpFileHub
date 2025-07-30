@@ -3,6 +3,7 @@ using CorpFileHub.Domain.Interfaces.Services;
 using CorpFileHub.Infrastructure.Repositories;
 using CorpFileHub.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CorpFileHub.Infrastructure
@@ -22,10 +23,13 @@ namespace CorpFileHub.Infrastructure
             services.AddScoped<IFolderRepository, FolderRepository>();
             services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
-            // Регистрация сервисов
+            // Регистрация внешних сервисов
             services.AddScoped<IYandexDiskService, YandexDiskService>();
             services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<INotificationService, EmailNotificationService>();
+
+            // Регистрация UI сервисов
+            //services.AddScoped<ISignalRService, SignalRService>();
 
             return services;
         }
