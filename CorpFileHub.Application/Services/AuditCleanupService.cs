@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,13 +9,13 @@ namespace CorpFileHub.Application.Services
 {
     public class AuditCleanupService : BackgroundService
     {
-        private readonly IAuditService _auditService;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AuditCleanupService> _logger;
         private readonly int _retentionDays;
 
-        public AuditCleanupService(IAuditService auditService, ILogger<AuditCleanupService> logger, IConfiguration configuration)
+        public AuditCleanupService(IServiceScopeFactory scopeFactory, ILogger<AuditCleanupService> logger, IConfiguration configuration)
         {
-            _auditService = auditService;
+            _scopeFactory = scopeFactory;
             _logger = logger;
             _retentionDays = configuration.GetSection("Audit").GetValue<int>("RetentionDays", 365);
         }
@@ -23,8 +24,11 @@ namespace CorpFileHub.Application.Services
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                using var scope = _scopeFactory.CreateScope();
+                var auditService = scope.ServiceProvider.GetRequiredService<IAuditService>();
+
                 _logger.LogInformation("Запуск очистки журнала аудита");
-                await _auditService.CleanupOldLogsAsync(_retentionDays);
+                await auditService.CleanupOldLogsAsync(_retentionDays);
 
                 try
                 {
