@@ -4,6 +4,7 @@ using CorpFileHub.Infrastructure.Data;
 using CorpFileHub.Presentation.Hubs;
 using CorpFileHub.Presentation;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,9 @@ builder.Services.AddSignalR();
 
 // Контроллеры для API
 builder.Services.AddControllers();
+
+var ignoreSsl = builder.Configuration.GetValue<bool>("Security:IgnoreInvalidCertificate", false);
+
 builder.Services.AddHttpClient("ServerAPI", (sp, client) =>
 {
     var httpContext = sp.GetService<IHttpContextAccessor>()?.HttpContext;
@@ -54,6 +58,16 @@ builder.Services.AddHttpClient("ServerAPI", (sp, client) =>
         var baseUrl = builder.Configuration["Server:BaseUrl"] ?? builder.Configuration["urls"]?.Split(';').FirstOrDefault() ?? "http://localhost:5275";
         client.BaseAddress = new Uri(baseUrl);
     }
+
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    if (ignoreSsl)
+    {
+        handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    return handler;
+
 });
 builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("ServerAPI"));
 
@@ -119,6 +133,28 @@ using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await context.Database.MigrateAsync();
+
+        // Создание тестового администратора, если пользователей нет
+        if (!context.Users.Any())
+        {
+            var admin = new CorpFileHub.Domain.Entities.User
+            {
+                Email = "admin@corp.local",
+                FullName = "Test Admin",
+                PasswordHash = CorpFileHub.Application.Utilities.PasswordHasher.HashPassword("Admin123!"),
+                CreatedAt = DateTime.UtcNow,
+                LastLoginAt = DateTime.UtcNow,
+                IsActive = true,
+                IsAdmin = true,
+                Department = "IT",
+                Position = "Administrator"
+            };
+
+            context.Users.Add(admin);
+            await context.SaveChangesAsync();
+
+            Log.Information("Создан тестовый пользователь администратора: admin@corp.local / Admin123!");
+        }
 
         Log.Information("База данных успешно обновлена");
     }
