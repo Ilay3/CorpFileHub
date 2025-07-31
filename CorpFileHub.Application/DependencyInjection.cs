@@ -8,9 +8,6 @@ namespace CorpFileHub.Application
     {
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
-            // Регистрация HTTP Context Accessor для аудита
-            //services.AddHttpContextAccessor();
-
             // Регистрация Application сервисов
             services.AddScoped<Services.IAuditService, Services.AuditService>();
             services.AddScoped<Services.IFileManagementService, Services.FileManagementService>();
