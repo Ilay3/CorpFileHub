@@ -1,0 +1,165 @@
+@using CorpFileHub.Application.UseCases.Access
+@using CorpFileHub.Domain.Enums
+@inject HttpClient Http
+
+@if (IsVisible)
+{
+    <div class="modal fade show" style="display:block;background:rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Права доступа</h5>
+                    <button type="button" class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (accessList == null)
+                    {
+                        <p>Загрузка...</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Пользователь</th>
+                                    <th>Уровень</th>
+                                    <th>Действует до</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in accessList)
+                                {
+                                    <tr>
+                                        <td>@a.UserName (@a.UserEmail)</td>
+                                        <td>@a.AccessLevelText</td>
+                                        <td>@(a.ExpiresAt?.ToString("g") ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+
+                        <EditForm Model="model" OnValidSubmit="SaveAsync" formname="access-dialog">
+                            <DataAnnotationsValidator />
+                            <div class="mb-2">
+                                <label class="form-label">Пользователь</label>
+                                <select class="form-select" @bind="model.UserId">
+                                    <option value="0">-- выберите --</option>
+                                    @foreach (var u in users)
+                                    {
+                                        <option value="@u.Id">@u.FullName (@u.Email)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Уровень доступа</label>
+                                <select class="form-select" @bind="model.AccessLevel">
+                                    <option value="@AccessLevel.Read">Чтение</option>
+                                    <option value="@AccessLevel.Write">Чтение/запись</option>
+                                    <option value="@AccessLevel.Delete">Полный</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Истекает</label>
+                                <InputDate class="form-control" @bind-Value="model.ExpiresAt" />
+                            </div>
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-primary">Сохранить</button>
+                                <button type="button" class="btn btn-secondary ms-2" @onclick="Close">Отмена</button>
+                            </div>
+                        </EditForm>
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="text-danger mt-2">@errorMessage</div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string EntityType { get; set; } = "File";
+    [Parameter] public int EntityId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<UserAccessInfo>? accessList;
+    private List<UserDto> users = new();
+    private AccessModel model = new();
+    private string? errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            accessList = EntityType == "File"
+                ? await Http.GetFromJsonAsync<List<UserAccessInfo>>($"api/access/files/{EntityId}")
+                : await Http.GetFromJsonAsync<List<UserAccessInfo>>($"api/access/folders/{EntityId}");
+            var userResult = await Http.GetFromJsonAsync<List<UserDto>>("api/users");
+            if (userResult != null)
+                users = userResult;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        try
+        {
+            if (EntityType == "File")
+            {
+                await Http.PostAsJsonAsync($"api/access/files/{EntityId}", new SetFileAccessRequest
+                {
+                    UserId = model.UserId,
+                    AccessLevel = model.AccessLevel,
+                    ExpiresAt = model.ExpiresAt
+                });
+            }
+            else
+            {
+                await Http.PostAsJsonAsync($"api/access/folders/{EntityId}", new SetFolderAccessRequest
+                {
+                    UserId = model.UserId,
+                    AccessLevel = model.AccessLevel,
+                    ExpiresAt = model.ExpiresAt
+                });
+            }
+            await LoadData();
+            model = new AccessModel();
+            if (OnChanged.HasDelegate)
+                await OnChanged.InvokeAsync(null);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task Close()
+    {
+        if (OnClose.HasDelegate)
+            await OnClose.InvokeAsync();
+    }
+
+    class AccessModel
+    {
+        public int UserId { get; set; }
+        public AccessLevel AccessLevel { get; set; } = AccessLevel.Read;
+        public DateTime? ExpiresAt { get; set; }
+    }
+}
+

@@ -1,0 +1,10 @@
+@page "/folders/{Id:int}/access"
+@inject NavigationManager Nav
+
+<AccessRightsDialog IsVisible="true" EntityType="Folder" EntityId="@Id" OnClose="Back" />
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    void Back() => Nav.NavigateTo("/files");
+}

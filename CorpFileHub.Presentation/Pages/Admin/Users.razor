@@ -1,0 +1,49 @@
+@page "/admin/users"
+@inject HttpClient Http
+
+<h3>Пользователи</h3>
+
+@if (users == null)
+{
+    <p>Загрузка...</p>
+}
+else if (!users.Any())
+{
+    <p>Список пуст</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var u in users)
+        {
+            <tr>
+                <td>@u.fullName</td>
+                <td>@u.email</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<UserItem>? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await Http.GetFromJsonAsync<List<UserItem>>("api/users");
+    }
+
+    private class UserItem
+    {
+        public int id { get; set; }
+        public string fullName { get; set; } = string.Empty;
+        public string email { get; set; } = string.Empty;
+    }
+}
