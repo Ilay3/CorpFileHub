@@ -1,0 +1,87 @@
+@using CorpFileHub.Application.DTOs
+
+<div class="folder-tree-item">
+    <div class="folder-item @(IsSelected ? "selected" : "")" @onclick="OnClick">
+        @if (HasChildren)
+        {
+            <button class="btn btn-sm btn-link p-0 me-1" @onclick="ToggleExpand" @onclick:stopPropagation="true">
+                <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            </button>
+        }
+        else
+        {
+            <span class="me-3"></span>
+        }
+        <i class="bi @(isExpanded ? "bi-folder2-open" : "bi-folder") me-1"></i>
+        <span>@Folder.Name</span>
+    </div>
+    @if (isExpanded && HasChildren)
+    {
+        <div class="ms-4">
+            @foreach (var child in ChildFolders)
+            {
+                <FolderTreeItem Folder="child"
+                                AllFolders="AllFolders"
+                                SelectedFolderId="SelectedFolderId"
+                                OnFolderSelect="OnFolderSelect"
+                                OnChanged="OnChanged" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public FolderTreeDto Folder { get; set; } = null!;
+    [Parameter] public List<FolderTreeDto> AllFolders { get; set; } = new();
+    [Parameter] public int? SelectedFolderId { get; set; }
+    [Parameter] public EventCallback<int?> OnFolderSelect { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool isExpanded = false;
+
+    private bool IsSelected => SelectedFolderId == Folder.Id;
+
+    private bool HasChildren => ChildFolders.Any();
+
+    private List<FolderTreeDto> ChildFolders =>
+        AllFolders?.Where(f => f.ParentFolderId == Folder.Id)
+                  .OrderBy(f => f.Name)
+                  .ToList() ?? new();
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedFolderId.HasValue && IsParentOfSelected())
+        {
+            isExpanded = true;
+        }
+    }
+
+    private bool IsParentOfSelected()
+    {
+        if (!SelectedFolderId.HasValue) return false;
+
+        var selected = AllFolders?.FirstOrDefault(f => f.Id == SelectedFolderId);
+        if (selected == null) return false;
+
+        var current = selected;
+        while (current?.ParentFolderId != null)
+        {
+            if (current.ParentFolderId == Folder.Id)
+                return true;
+            current = AllFolders?.FirstOrDefault(f => f.Id == current.ParentFolderId);
+        }
+
+        return false;
+    }
+
+    private async Task OnClick()
+    {
+        await OnFolderSelect.InvokeAsync(Folder.Id);
+    }
+
+    private async Task ToggleExpand()
+    {
+        isExpanded = !isExpanded;
+        await Task.CompletedTask;
+    }
+}

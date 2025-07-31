@@ -31,9 +31,6 @@ namespace CorpFileHub.Infrastructure
             services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<INotificationService, EmailNotificationService>();
 
-            // Регистрация UI сервисов
-            //services.AddScoped<ISignalRService, SignalRService>();
-
             return services;
         }
     }

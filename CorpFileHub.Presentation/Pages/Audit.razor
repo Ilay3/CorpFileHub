@@ -1,0 +1,68 @@
+@page "/admin/audit"
+@inject HttpClient Http
+
+<h3>Журнал аудита</h3>
+
+@if (loading)
+{
+    <p>Загрузка...</p>
+}
+else if (!string.IsNullOrEmpty(error))
+{
+    <div class="text-danger">@error</div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Пользователь</th>
+                <th>Действие</th>
+                <th>Объект</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var log in Logs)
+            {
+                <tr>
+                    <td>@log.FormattedDate</td>
+                    <td>@log.UserName</td>
+                    <td><span class="@log.ActionBadgeClass"><i class="@log.ActionIcon"></i> @log.ActionText</span></td>
+                    <td>@log.EntityName</td>
+                    <td>@log.StatusText</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<AuditLogDto> Logs = new();
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<AuditLogPagedResult>("api/audit");
+            Logs = result?.Items ?? new();
+        }
+        catch (Exception ex)
+        {
+            error = $"Ошибка загрузки журнала: {ex.Message}";
+        }
+        loading = false;
+    }
+
+    private class AuditLogPagedResult
+    {
+        public List<AuditLogDto> Items { get; set; } = new();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int PageCount { get; set; }
+        public int TotalCount { get; set; }
+    }
+}

@@ -2,6 +2,7 @@
 using CorpFileHub.Infrastructure;
 using CorpFileHub.Infrastructure.Data;
 using CorpFileHub.Presentation.Hubs;
+using CorpFileHub.Presentation;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -34,6 +35,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Регистрация слоев
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.AddPresentationServices();
 
 // SignalR для real-time обновлений
 builder.Services.AddSignalR();

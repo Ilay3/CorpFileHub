@@ -1,0 +1,133 @@
+@page "/folders/{Id:int?}"
+@inject HttpClient Http
+@using CorpFileHub.Application.DTOs
+@using System.Net.Http.Json
+
+<h3>Мои документы</h3>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        @foreach (var crumb in Breadcrumbs)
+        {
+            if (crumb.IsClickable)
+            {
+                <li class="breadcrumb-item"><a href="/folders/@crumb.Id">@crumb.Name</a></li>
+            }
+            else
+            {
+                <li class="breadcrumb-item active" aria-current="page">@crumb.Name</li>
+            }
+        }
+    </ol>
+</nav>
+
+<div class="mb-3">
+    <input type="text" class="form-control d-inline w-auto" placeholder="Новая папка" @bind="newFolderName" />
+    <button class="btn btn-primary ms-2" @onclick="CreateFolder">Создать</button>
+</div>
+
+<InputFile OnChange="UploadFile" />
+
+@if (loading)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div>
+        <h5>Папки</h5>
+        <ul class="list-unstyled">
+            @foreach (var f in FoldersList)
+            {
+                <li class="mb-1">
+                    <a href="/folders/@f.Id">@f.Name</a>
+                    <button class="btn btn-sm btn-link text-danger" @onclick="() => DeleteFolder(f.Id)">удалить</button>
+                </li>
+            }
+        </ul>
+    </div>
+
+    <div class="mt-3">
+        <h5>Файлы</h5>
+        <ul class="list-unstyled">
+            @foreach (var file in Files)
+            {
+                <li class="mb-1">
+                    <a href="api/files/@file.Id/download">@file.Name</a> (@file.FormattedSize)
+                    <button class="btn btn-sm btn-link text-danger" @onclick="() => DeleteFile(file.Id)">удалить</button>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private List<FolderDto> FoldersList = new();
+    private List<FileDto> Files = new();
+    private List<BreadcrumbDto> Breadcrumbs = new();
+    private bool loading = true;
+    private string? newFolderName;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        int folderId = Id ?? 0;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<FolderContentResponse>($"api/folders/{folderId}/content");
+            FoldersList = result?.folders ?? new();
+            Files = result?.files ?? new();
+            Breadcrumbs = await Http.GetFromJsonAsync<List<BreadcrumbDto>>($"api/folders/{folderId}/breadcrumbs")
+                           ?? new();
+            if (Breadcrumbs.Count > 0)
+            {
+                Breadcrumbs[^1].IsClickable = false;
+            }
+        }
+        catch
+        {
+            FoldersList.Clear();
+            Files.Clear();
+            Breadcrumbs.Clear();
+        }
+        loading = false;
+    }
+
+    private async Task CreateFolder()
+    {
+        if (string.IsNullOrWhiteSpace(newFolderName))
+            return;
+
+        var response = await Http.PostAsJsonAsync("api/folders", new { name = newFolderName, parentFolderId = Id ?? 0 });
+        newFolderName = string.Empty;
+        await OnParametersSetAsync();
+    }
+
+    private async Task UploadFile(InputFileChangeEventArgs e)
+    {
+        if (e.FileCount == 0) return;
+        var file = e.File;
+        using var content = new MultipartFormDataContent();
+        var stream = file.OpenReadStream(file.Size);
+        content.Add(new StreamContent(stream), "file", file.Name);
+        content.Add(new StringContent((Id ?? 0).ToString()), "folderId");
+        var response = await Http.PostAsync("api/files/upload", content);
+        await OnParametersSetAsync();
+    }
+
+    private async Task DeleteFile(int id)
+    {
+        await Http.DeleteAsync($"api/files/{id}");
+        await OnParametersSetAsync();
+    }
+
+    private async Task DeleteFolder(int id)
+    {
+        await Http.DeleteAsync($"api/folders/{id}");
+        await OnParametersSetAsync();
+    }
+
+    private record FolderContentResponse(List<FolderDto> folders, List<FileDto> files);
+}
