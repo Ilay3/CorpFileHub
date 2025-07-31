@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,16 +9,16 @@ namespace CorpFileHub.Application.Services
 {
     public class FileVersionCleanupService : BackgroundService
     {
-        private readonly IFileManagementService _fileManagementService;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<FileVersionCleanupService> _logger;
         private readonly int _retentionDays;
         private readonly int _maxVersions;
 
-        public FileVersionCleanupService(IFileManagementService fileManagementService,
+        public FileVersionCleanupService(IServiceScopeFactory scopeFactory,
             ILogger<FileVersionCleanupService> logger,
             IConfiguration configuration)
         {
-            _fileManagementService = fileManagementService;
+            _scopeFactory = scopeFactory;
             _logger = logger;
             _retentionDays = configuration.GetValue<int>("Versioning:RetentionDays", 365);
             _maxVersions = configuration.GetValue<int>("Versioning:MaxVersionsPerFile", 10);
@@ -29,7 +30,10 @@ namespace CorpFileHub.Application.Services
             {
                 try
                 {
-                    var removed = await _fileManagementService.CleanupOldVersionsAsync();
+                    using var scope = _scopeFactory.CreateScope();
+                    var fileManagementService = scope.ServiceProvider.GetRequiredService<IFileManagementService>();
+
+                    var removed = await fileManagementService.CleanupOldVersionsAsync();
                     if (removed > 0)
                     {
                         _logger.LogInformation("Очистка старых версий файлов: удалено {Count}", removed);

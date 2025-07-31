@@ -42,6 +42,9 @@ builder.Services.AddSignalR();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 
+// Хранилище сессий в памяти
+builder.Services.AddDistributedMemoryCache();
+
 // Настройка сессий
 builder.Services.AddSession(options =>
 {
