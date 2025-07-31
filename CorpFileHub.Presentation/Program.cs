@@ -43,7 +43,9 @@ builder.Services.AddSignalR();
 
 // Контроллеры для API
 builder.Services.AddControllers();
+
 var ignoreSsl = builder.Configuration.GetValue<bool>("Security:IgnoreInvalidCertificate", false);
+
 builder.Services.AddHttpClient("ServerAPI", (sp, client) =>
 {
     var httpContext = sp.GetService<IHttpContextAccessor>()?.HttpContext;
@@ -56,6 +58,7 @@ builder.Services.AddHttpClient("ServerAPI", (sp, client) =>
         var baseUrl = builder.Configuration["Server:BaseUrl"] ?? builder.Configuration["urls"]?.Split(';').FirstOrDefault() ?? "http://localhost:5275";
         client.BaseAddress = new Uri(baseUrl);
     }
+
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     var handler = new HttpClientHandler();
@@ -64,6 +67,7 @@ builder.Services.AddHttpClient("ServerAPI", (sp, client) =>
         handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
     }
     return handler;
+
 });
 builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("ServerAPI"));
 
