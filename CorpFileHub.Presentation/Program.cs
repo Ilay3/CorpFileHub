@@ -42,7 +42,20 @@ builder.Services.AddSignalR();
 
 // Контроллеры для API
 builder.Services.AddControllers();
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("ServerAPI", (sp, client) =>
+{
+    var httpContext = sp.GetService<IHttpContextAccessor>()?.HttpContext;
+    if (httpContext != null)
+    {
+        client.BaseAddress = new Uri($"{httpContext.Request.Scheme}://{httpContext.Request.Host}");
+    }
+    else
+    {
+        var baseUrl = builder.Configuration["Server:BaseUrl"] ?? builder.Configuration["urls"]?.Split(';').FirstOrDefault() ?? "http://localhost:5275";
+        client.BaseAddress = new Uri(baseUrl);
+    }
+});
+builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("ServerAPI"));
 
 // Хранилище сессий в памяти
 builder.Services.AddDistributedMemoryCache();
